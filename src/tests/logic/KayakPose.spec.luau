@@ -1,0 +1,71 @@
+-- Wygląd kajaka: zgodność kursu z fizyką, kierunki przechyłu i ruch wiosła.
+
+return function(t)
+	local KayakPose = require(t.client.logic.KayakPose)
+
+	t.describe("cframe", function()
+		t.it("przód kajaka zgadza się z kursem z KayakPhysics", function()
+			for _, heading in { 0, 1, -2, 3 } do
+				local look = KayakPose.cframe(0, 0, 0, heading, 0, 0).LookVector
+				t.expect(look.X).toBeCloseTo(math.cos(heading))
+				t.expect(look.Z).toBeCloseTo(math.sin(heading))
+			end
+		end)
+		t.it("prawa burta jest po prawej stronie fizyki (-sin, cos)", function()
+			local right = KayakPose.cframe(0, 0, 0, 0.7, 0, 0).RightVector
+			t.expect(right.X).toBeCloseTo(-math.sin(0.7))
+			t.expect(right.Z).toBeCloseTo(math.cos(0.7))
+		end)
+		t.it("dodatni pitch podnosi dziób, dodatni roll prawą burtę", function()
+			t.expect(KayakPose.cframe(0, 0, 0, 0, 0.2, 0).LookVector.Y).toBeGreaterThan(0)
+			t.expect(KayakPose.cframe(0, 0, 0, 0, 0, 0.2).RightVector.Y).toBeGreaterThan(0)
+		end)
+	end)
+
+	t.describe("lerpAngle", function()
+		t.it("idzie najkrótszą drogą przez ±π", function()
+			local value = KayakPose.lerpAngle(3, -3, 0.5)
+			t.expect(math.abs(KayakPose.wrapAngle(value))).toBeGreaterThan(3)
+		end)
+	end)
+
+	t.describe("target", function()
+		t.it("skręt w prawo kładzie na prawą burtę", function()
+			local _, straight = KayakPose.target(0, 0, 0, nil, 0, 10)
+			local _, turning = KayakPose.target(0, 0, 2, nil, 0, 10)
+			t.expect(turning).toBeLessThan(straight)
+		end)
+		t.it("machnięcie lewym wiosłem unosi prawą burtę", function()
+			local _, idle = KayakPose.target(0, 0, 0, nil, 0, 10)
+			local _, stroke = KayakPose.target(0, 0, 0, -1, 1, 10)
+			t.expect(stroke).toBeGreaterThan(idle)
+		end)
+		t.it("w bystrzach fale są wyższe", function()
+			local clock = math.pi / 3.6 -- szczyt sin(1,8 t)
+			local _, _, calm = KayakPose.target(clock, 0, 0, nil, 0, 10)
+			local _, _, rapids = KayakPose.target(clock, 0, 0, nil, 0, 40)
+			t.expect(rapids).toBeGreaterThan(calm)
+		end)
+	end)
+
+	t.describe("wiosło", function()
+		t.it("łopata idzie w wodę po stronie machnięcia, od dziobu do rufy", function()
+			local startYaw = KayakPose.paddleStroke(1, 0)
+			local endYaw = KayakPose.paddleStroke(1, 1)
+			t.expect(startYaw).toBeGreaterThan(0)
+			t.expect(endYaw).toBeLessThan(0)
+		end)
+		t.it("znaki zgadzają się z CFrame: opada łopata po stronie side, na starcie jest z przodu (−Z)", function()
+			for _, side in { -1, 1 } do
+				local blade = Vector3.new(side * 3, 0, 0)
+				local yaw, roll = KayakPose.paddleStroke(side, 0.5)
+				t.expect((CFrame.Angles(0, yaw, roll) * blade).Y).toBeLessThan(0)
+				yaw, roll = KayakPose.paddleStroke(side, 0)
+				t.expect((CFrame.Angles(0, yaw, roll) * blade).Z).toBeLessThan(0)
+				yaw, roll = KayakPose.paddleBrace(side)
+				t.expect((CFrame.Angles(0, yaw, roll) * blade).Y).toBeLessThan(0)
+				t.expect((CFrame.Angles(0, yaw, roll) * blade).Z).toBeGreaterThan(0)
+			end
+		end)
+	end)
+end

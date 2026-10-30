@@ -1,0 +1,320 @@
+-- Fazy wyścigu, linia startu i mety, wyniki, anty-oszustwo (czysta logika serwera).
+
+return function(t)
+	local Config = require(t.shared.Config)
+	local KayakPhysics = require(t.shared.KayakPhysics)
+	local River = require(t.shared.River)
+	local RaceLogic = require(t.server.RaceLogic)
+
+	local START, FINISH = 25, 1000
+
+	-- Wyścig w fazie racing, z zapisanymi zawodnikami, od chwili 10.
+	local function racing(ids: { number })
+		local race = RaceLogic.new(START, FINISH)
+		race:tick(0, 1)
+		for _, id in ids do
+			race:enroll(id, "gracz" .. id, Vector2.new(0, 0), Config.START_DISTANCE, 0)
+		end
+		race:tick(Config.COUNTDOWN_TIME, 1)
+		return race
+	end
+
+	-- Płynie prosto do `toS` z bezpieczną prędkością; zwraca ostatni wynik sample.
+	local function swim(race, id: number, fromS: number, toS: number, startAt: number, speed: number)
+		local result, now = nil, startAt
+		local s = fromS
+		while s < toS do
+			now += 0.1
+			s += speed * 0.1
+			result = race:sample(id, Vector2.new(0, s), s, 0, now) or result
+		end
+		return result, now
+	end
+
+	t.describe("fazy", function()
+		t.it("bez graczy czeka", function()
+			local race = RaceLogic.new(START, FINISH)
+			t.expect(race:tick(5, 0)).toBe(nil)
+			t.expect(race.phase).toBe("waiting")
+		end)
+		t.it("jeden gracz wystarczy do odliczania", function()
+			local race = RaceLogic.new(START, FINISH)
+			t.expect(race:tick(5, 1)).toBe("countdown")
+			t.expect(race.phaseEndsAt).toBe(5 + Config.COUNTDOWN_TIME)
+		end)
+		t.it("countdown → racing po czasie, wcześniej nic", function()
+			local race = RaceLogic.new(START, FINISH)
+			race:tick(0, 1)
+			race:enroll(1, "a", Vector2.zero, 15, 0)
+			t.expect(race:tick(Config.COUNTDOWN_TIME - 0.1, 1)).toBe(nil)
+			t.expect(race:tick(Config.COUNTDOWN_TIME, 1)).toBe("racing")
+		end)
+		t.it("wszyscy wyszli w countdown → waiting", function()
+			local race = RaceLogic.new(START, FINISH)
+			race:tick(0, 1)
+			t.expect(race:tick(1, 0)).toBe("waiting")
+		end)
+		t.it("meta wszystkich kończy wyścig od razu", function()
+			local race = racing({ 1 })
+			local result, now = swim(race, 1, 15, 1001, 10, 20)
+			t.expect(result).toBe("finished")
+			t.expect(race:tick(now, 1)).toBe("results")
+			t.expect(race:tick(now + Config.RESULTS_TIME, 1)).toBe("countdown")
+		end)
+		t.it("po pierwszym na mecie reszta ma FINISH_GRACE", function()
+			local race = racing({ 1, 2 })
+			local _, now = swim(race, 1, 15, 1001, 10, 20)
+			t.expect(race:tick(now, 2)).toBe(nil)
+			t.expect(race.phaseEndsAt).toBeCloseTo(now + Config.FINISH_GRACE)
+			t.expect(race:tick(now + Config.FINISH_GRACE, 2)).toBe("results")
+		end)
+		t.it("limit czasu kończy wyścig bez mety", function()
+			local race = racing({ 1 })
+			t.expect(race:tick(10 + Config.RACE_TIME_LIMIT, 1)).toBe("results")
+			t.expect(#race:results()).toBe(0)
+		end)
+		t.it("po results bez graczy → waiting, nowy countdown czyści listę", function()
+			local race = racing({ 1 })
+			race:tick(10 + Config.RACE_TIME_LIMIT, 1)
+			race:tick(10 + Config.RACE_TIME_LIMIT + Config.RESULTS_TIME, 1)
+			t.expect(next(race.racers)).toBe(nil)
+			t.expect(race.nextSlot).toBe(0)
+		end)
+	end)
+
+	t.describe("pomiar czasu", function()
+		t.it("zegar rusza na linii startu, nie wcześniej (z interpolacją)", function()
+			local race = racing({ 1 })
+			race:sample(1, Vector2.new(0, 20), 20, 0, 11)
+			t.expect(race.racers[1].startedAt).toBe(nil)
+			race:sample(1, Vector2.new(0, 30), 30, 0, 12)
+			t.expect(race.racers[1].startedAt).toBeCloseTo(11.5)
+		end)
+		t.it("czas = meta − start linii", function()
+			local race = racing({ 1 })
+			swim(race, 1, 15, 1001, 10, 20)
+			-- 975 studs między liniami przy 20 studs/s
+			t.expect(race.racers[1].time).toBeCloseTo(48.75, 0.01)
+		end)
+		t.it("wyniki od najszybszego, nieukończeni poza listą", function()
+			local race = racing({ 1, 2, 3 })
+			swim(race, 1, 15, 1001, 10, 20)
+			swim(race, 2, 15, 1001, 10, 30)
+			local rows = race:results()
+			t.expect(#rows).toBe(2)
+			t.expect(rows[1].userId).toBe(2)
+			t.expect(rows[2].name).toBe("gracz1")
+		end)
+		t.it("kto dopłynął i wyszedł, zostaje w wynikach; kto nie, znika", function()
+			local race = racing({ 1, 2 })
+			swim(race, 1, 15, 1001, 10, 20)
+			race:remove(1)
+			race:remove(2)
+			t.expect(#race:results()).toBe(1)
+			t.expect(race.racers[2]).toBe(nil)
+		end)
+	end)
+
+	t.describe("spóźnialski", function()
+		t.it("zegar od zapisu, poza wynikami, nie skraca wyścigu i nie blokuje końca", function()
+			local race = racing({ 1 })
+			race:enroll(9, "late", Vector2.new(0, 15), 15, 20)
+			t.expect(race.racers[9].late).toBe(true)
+			t.expect(race.racers[9].startedAt).toBe(20)
+			local endsAt = race.phaseEndsAt
+			local result = swim(race, 9, 15, 1001, 20, 20)
+			t.expect(result).toBe("finished")
+			t.expect(race.phaseEndsAt).toBe(endsAt)
+			t.expect(#race:results()).toBe(0)
+			local _, now = swim(race, 1, 15, 1001, 10, 20)
+			t.expect(race:tick(now, 2)).toBe("results")
+		end)
+	end)
+
+	t.describe("anty-oszustwo", function()
+		t.it("teleport na metę odrzuca wynik", function()
+			local race = racing({ 1 })
+			t.expect(race:sample(1, Vector2.new(0, 1001), 1001, 0, 11)).toBe("invalid")
+			t.expect(race.racers[1].time).toBe(nil)
+			t.expect(#race:results()).toBe(0)
+		end)
+		t.it("stała prędkość ponad limit odrzuca wynik", function()
+			local race = racing({ 1 })
+			local result = swim(race, 1, 15, 1001, 10, Config.MAX_KAYAK_SPEED * 1.5)
+			t.expect(result).toBe("invalid")
+		end)
+		t.it("szarpnięcie po 2 s lagu nie jest oszustwem", function()
+			local race = racing({ 1 })
+			race:sample(1, Vector2.new(0, 16), 16, 0, 12)
+			t.expect(race:sample(1, Vector2.new(0, 16), 16, 0, 14)).toBe(nil)
+			t.expect(race:sample(1, Vector2.new(0, 116), 116, 0, 14.1)).toBe(nil)
+			t.expect(race.racers[1].invalid).toBe(false)
+		end)
+		t.it("wypłynięcie daleko poza koryto odrzuca wynik", function()
+			local race = racing({ 1 })
+			t.expect(race:sample(1, Vector2.new(0, 16), 16, Config.OFF_RIVER_TOLERANCE + 1, 11)).toBe("invalid")
+		end)
+		t.it("odrzucony nie blokuje końca wyścigu", function()
+			local race = racing({ 1 })
+			race:sample(1, Vector2.new(0, 1001), 1001, 0, 11)
+			t.expect(race:tick(11.1, 1)).toBe("results")
+		end)
+		t.it("uczciwy bot na prawdziwej rzece nie wpada w limit", function()
+			local river = River.new(require(t.shared.content.rivers.Test))
+			local race = RaceLogic.new(Config.START_LINE, river.length - Config.FINISH_MARGIN)
+			race:tick(0, 1)
+			local start = river:pointAt(Config.START_DISTANCE)
+			local q = river:query(start)
+			race:enroll(1, "bot", start, Config.START_DISTANCE, 0)
+			race:tick(Config.COUNTDOWN_TIME, 1)
+
+			local state = KayakPhysics.new(start, math.atan2(q.tangent.Y, q.tangent.X))
+			local side, now = -1, Config.COUNTDOWN_TIME
+			local nextSample = now
+			local top = 0
+			local result = nil
+			while result == nil and now < 300 do
+				q = river:query(state.position, state.hint)
+				-- Bot trzyma się środka: wiosłuje po stronie, która skręca ku osi rzeki, a na prostej naprzemiennie.
+				local aim = q.tangent - q.normal * math.clamp(q.lateral / q.halfWidth, -1, 1)
+				local turn = (math.atan2(aim.Y, aim.X) - state.heading + math.pi) % (2 * math.pi) - math.pi
+				if math.abs(turn) > 0.15 then
+					side = if turn > 0 then -1 else 1
+				else
+					side = -side
+				end
+				KayakPhysics.requestStroke(state, side)
+				KayakPhysics.step(state, river, nil, Config.STEP)
+				now += Config.STEP
+				top = math.max(top, state.velocity.Magnitude)
+				if now >= nextSample then
+					nextSample += Config.RACE_SAMPLE_INTERVAL
+					local here = river:query(state.position, state.hint)
+					result = race:sample(1, state.position, here.s, math.abs(here.lateral) - here.halfWidth, now)
+				end
+			end
+			print("[bot] wynik", result, "czas", race.racers[1].time, "szczyt prędkości", top)
+			t.expect(result).toBe("finished")
+			t.expect(top).toBeLessThan(Config.MAX_KAYAK_SPEED)
+		end)
+	end)
+
+	t.describe("miejsca startowe", function()
+		t.it("pierwszy na środku, potem na zmianę po bokach", function()
+			local s, lateral = RaceLogic.slot(0, 20)
+			t.expect(s).toBe(Config.START_DISTANCE)
+			t.expect(lateral).toBe(0)
+			local _, right = RaceLogic.slot(1, 20)
+			local _, left = RaceLogic.slot(2, 20)
+			t.expect(right).toBe(Config.SLOT_SPACING)
+			t.expect(left).toBe(-Config.SLOT_SPACING)
+		end)
+		t.it("nikt nie stoi za brzegiem, nadmiar idzie do kolejnego rzędu", function()
+			for index = 0, 30 do
+				local s, lateral = RaceLogic.slot(index, 20)
+				t.expect(math.abs(lateral)).toBeLessThan(20 - Config.KAYAK_RADIUS + 0.01)
+				t.expect(s).toBeGreaterThan(0)
+			end
+			local s = RaceLogic.slot(7, 20)
+			t.expect(s).toBe(Config.START_DISTANCE - Config.SLOT_ROW_SPACING)
+		end)
+	end)
+
+	t.describe("czekanie na grupę z wioski", function()
+		local function gathering(expected: number)
+			local race = RaceLogic.new(START, FINISH)
+			race:expectPlayers(expected)
+			return race
+		end
+
+		t.it("czeka, aż dotrą wszyscy, i wtedy rusza od razu", function()
+			local race = gathering(3)
+			t.expect(race:tick(0, 1)).toBe(nil)
+			t.expect(race:tick(5, 2)).toBe(nil)
+			t.expect(race.phase).toBe("waiting")
+			t.expect(race:tick(6, 3)).toBe("countdown")
+		end)
+		t.it("czeka najwyżej RACE_GATHER_TIME od pierwszego gracza", function()
+			local race = gathering(3)
+			t.expect(race:tick(100, 0)).toBe(nil) -- pusty serwer jeszcze nie liczy czasu
+			t.expect(race:tick(200, 1)).toBe(nil)
+			t.expect(race:tick(200 + Config.RACE_GATHER_TIME - 0.1, 2)).toBe(nil)
+			t.expect(race:tick(200 + Config.RACE_GATHER_TIME, 2)).toBe("countdown")
+		end)
+		t.it("czekanie dotyczy tylko pierwszego wyścigu", function()
+			local race = gathering(2)
+			race:tick(0, 2)
+			race:tick(1, 0) -- wszyscy wyszli
+			t.expect(race.phase).toBe("waiting")
+			t.expect(race:tick(2, 1)).toBe("countdown")
+		end)
+	end)
+
+	t.describe("jeszcze raz", function()
+		-- Dwóch graczy w fazie results, wyniki pokazane w chwili 50.
+		local function results()
+			local race = racing({ 1, 2 })
+			race:tick(Config.COUNTDOWN_TIME + 1, 2)
+			race.phaseEndsAt = 0
+			race:tick(50, 2)
+			t.expect(race.phase).toBe("results")
+			return race
+		end
+
+		t.it("wszyscy kliknęli: odliczanie 3 s", function()
+			local race = results()
+			race:voteAgain(1)
+			t.expect(race:tick(51, 2)).toBe(nil)
+			race:voteAgain(2)
+			t.expect(race:tick(52, 2)).toBe("countdown")
+			t.expect(race.phaseEndsAt).toBe(52 + Config.AGAIN_COUNTDOWN)
+		end)
+		t.it("głos ostatniego w trakcie odliczania skraca je do 3 s", function()
+			local race = results()
+			race:voteAgain(1)
+			local countdownAt = 50 + Config.RESULTS_TIME
+			race:tick(countdownAt, 2)
+			t.expect(race.phase).toBe("countdown")
+			t.expect(race.phaseEndsAt).toBe(countdownAt + Config.COUNTDOWN_TIME)
+			race:voteAgain(2)
+			race:tick(countdownAt + 1, 2)
+			t.expect(race.phaseEndsAt).toBe(countdownAt + 1 + Config.AGAIN_COUNTDOWN)
+			race:tick(countdownAt + 2, 2)
+			t.expect(race.phaseEndsAt).toBe(countdownAt + 1 + Config.AGAIN_COUNTDOWN) -- kolejne obiegi nie przesuwają końca
+		end)
+		t.it("wyjście niezdecydowanego domyka głosowanie", function()
+			local race = results()
+			race:voteAgain(1)
+			race:remove(2)
+			t.expect(race:tick(51, 1)).toBe("countdown")
+		end)
+		t.it("głos kogoś, kto wyszedł, się nie liczy", function()
+			local race = results()
+			race:voteAgain(1)
+			race:remove(1)
+			t.expect(race:tick(51, 1)).toBe(nil)
+		end)
+		t.it("w trakcie wyścigu głos jest ignorowany, a nowy wyścig zaczyna bez głosów", function()
+			t.expect(racing({ 1 }):voteAgain(1)).toBe(false)
+			local race = results()
+			race:voteAgain(1)
+			race:voteAgain(2)
+			race:tick(51, 2)
+			race:tick(51 + Config.AGAIN_COUNTDOWN, 2)
+			t.expect(race.phase).toBe("racing")
+			t.expect(next(race.againVotes)).toBe(nil)
+		end)
+	end)
+
+	t.describe("rekordy", function()
+		t.it("pierwszy czas i lepszy to rekord, gorszy nie", function()
+			t.expect(RaceLogic.isRecord(nil, 100)).toBe(true)
+			t.expect(RaceLogic.isRecord(100, 99.9)).toBe(true)
+			t.expect(RaceLogic.isRecord(100, 100)).toBe(false)
+		end)
+		t.it("wynik do rankingu w całych milisekundach", function()
+			t.expect(RaceLogic.timeToScore(123.4567)).toBe(123457)
+			t.expect(RaceLogic.scoreToTime(123457)).toBe(123.457)
+		end)
+	end)
+end

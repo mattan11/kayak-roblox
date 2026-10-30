@@ -1,0 +1,10 @@
+# Pliki miejsc Robloxa (kod jest w src/, synchronizowany przez Rojo)
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+sourcemap.json
+
+
+# Źródła Blendera — kopie zapasowe
+*.blend1
