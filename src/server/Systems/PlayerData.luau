@@ -3,6 +3,7 @@
 -- medals[riverId] = najwyższy medal (1..3, tylko rośnie), schema = wersja danych (migracja w Medals.migrate).
 -- W Studio bez dostępu do API ProfileStore sam działa na danych tymczasowych, więc nic tu tego nie obsługuje.
 -- Gdy profil się nie wczyta, gracz po prostu gra bez zapisu: nie ma wtedy czym nadpisać prawdziwych danych.
+-- W trybie Bitwa profil wczytujemy zwyczajnie, ale nic się nie zmienia: bez rekordu, medalu, rankingu i liczników.
 -- (Dla TS: repozytorium z cache w pamięci — gra zmienia dane, a biblioteka sama je zapisuje.)
 
 local Players = game:GetService("Players")
@@ -58,8 +59,11 @@ local function load(player: Player)
 		profiles[player] = nil
 	end)
 	profiles[player] = profile
-	personalBest:FireClient(player, profile.Data.bestTimes[riverId], false)
-	player:SetAttribute(Medals.ATTRIBUTE, profile.Data.medals[riverId] or 0)
+	-- Brak atrybutu chowa medal na ekranie wyników, tak samo jak przy niewczytanym profilu.
+	if RiverBuilder.mode ~= "battle" then
+		personalBest:FireClient(player, profile.Data.bestTimes[riverId], false)
+		player:SetAttribute(Medals.ATTRIBUTE, profile.Data.medals[riverId] or 0)
+	end
 end
 
 -- Ukończony, zaakceptowany przejazd: licznik, rekord osobisty, a przy rekordzie wpis do globalnego rankingu.
@@ -67,7 +71,7 @@ end
 -- MedalAwarded idzie tylko wtedy, gdy stopień wzrósł, a atrybut niesie stan dla ekranu wyników.
 function PlayerData.recordFinish(player: Player, time: number)
 	local profile = profiles[player]
-	if not profile then
+	if not profile or RiverBuilder.mode == "battle" then
 		return
 	end
 	local data = profile.Data
@@ -87,7 +91,7 @@ end
 
 function PlayerData.addWin(player: Player)
 	local profile = profiles[player]
-	if profile then
+	if profile and RiverBuilder.mode ~= "battle" then
 		profile.Data.wins += 1
 	end
 end

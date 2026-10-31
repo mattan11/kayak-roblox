@@ -2,6 +2,8 @@
 -- potrzebuje do jazdy. Pozycja = Vector2(x, z), kurs w radianach: przód = (cos, sin), rosnący kurs = skręt w prawo.
 -- Prędkości liczymy WZGLĘDEM WODY: opór i ster działają tylko wtedy, gdy kajak porusza się inaczej niż nurt.
 -- side: -1 = lewa strona, 1 = prawa.
+-- Tryb Bitwa: stunUntil i boostUntil to chwile z os.clock() tego urządzenia, ustawia je BattleController po BattleEffect.
+-- W wyścigu oba zostają 0, więc nic nie zmieniają.
 
 local Config = require(script.Parent.Config)
 
@@ -25,6 +27,8 @@ export type State = {
 	lastQuery: any?, -- ostatnie współrzędne rzeczne (dla kamery i efektów)
 	lastHit: number, -- siła ostatniego uderzenia; efekty odczytują i zerują
 	strokes: number, -- licznik rozpoczętych machnięć
+	stunUntil: number, -- do tej chwili (os.clock) bez machnięć i wbicia, kajak niesie prąd
+	boostUntil: number, -- do tej chwili (os.clock) ciąg × Config.BATTLE_BOOST_THRUST
 }
 
 function KayakPhysics.new(position: Vector2, heading: number): State
@@ -44,6 +48,8 @@ function KayakPhysics.new(position: Vector2, heading: number): State
 		lastQuery = nil,
 		lastHit = 0,
 		strokes = 0,
+		stunUntil = 0,
+		boostUntil = 0,
 	}
 end
 
@@ -135,9 +141,16 @@ local function collide(state: State, river: any, others: { Vector2 }?)
 	end
 end
 
-local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: number): number?
+local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: number, now: number): number?
 	local started: number? = nil
-	if state.strokeSide == nil and state.queued ~= nil and state.brace == nil then
+	-- Ogłuszenie gasi machnięcie i kolejkę, a wbicia tylko nie liczy: state.brace to trzymany palec. Gdyby fizyka go zerowała,
+	-- KayakController co klatkę widziałby różnicę i wysyłał "brace" od nowa. Po ogłuszeniu trzymany palec działa dalej.
+	local stunned = now < state.stunUntil
+	local brace = if stunned then nil else state.brace
+	if stunned then
+		state.strokeSide, state.queued = nil, nil
+	end
+	if state.strokeSide == nil and state.queued ~= nil and brace == nil then
 		state.strokeSide, state.queued, state.strokeTime = state.queued, nil, 0
 		state.strokes += 1
 		started = state.strokeSide
@@ -161,6 +174,9 @@ local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: num
 		-- Sinus: wiosło wchodzi w wodę, największa siła w połowie, wychodzi
 		local power = math.sin(math.pi * state.strokeTime / Config.STROKE_TIME)
 		thrust = Config.STROKE_THRUST * power
+		if now < state.boostUntil then
+			thrust *= Config.BATTLE_BOOST_THRUST
+		end
 		torque = -state.strokeSide * Config.STROKE_TURN * power
 		state.strokeTime += dt
 		if state.strokeTime >= Config.STROKE_TIME then
@@ -168,11 +184,11 @@ local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: num
 		end
 	end
 
-	if state.brace then
+	if brace then
 		-- Wiosło jak ster: im szybciej woda je opływa, tym mocniej obraca
 		local flow = math.clamp(relative.Magnitude / Config.BRACE_FULL_SPEED, 0, 1)
 		local still = Config.BRACE_TURN_STILL
-		torque = state.brace * Config.BRACE_TURN * (still + (1 - still) * flow)
+		torque = brace * Config.BRACE_TURN * (still + (1 - still) * flow)
 		dragForward += Config.BRACE_DRAG
 	elseif current.Magnitude > 0 then
 		-- Nurt powoli ustawia dziób z prądem. Stojąca woda nie ma kierunku, więc na jeziorze kajak trzyma swój kurs.
@@ -205,9 +221,10 @@ end
 function KayakPhysics.step(state: State, river: any, others: { Vector2 }?, dt: number): number?
 	state.accumulator = math.min(state.accumulator + dt, 0.25) -- po przycięciu gry nie nadrabiamy w nieskończoność
 	local started: number? = nil
+	local now = os.clock() -- raz na klatkę: kroki jednej klatki trwają ułamek milisekundy
 	while state.accumulator >= Config.STEP do
 		state.accumulator -= Config.STEP
-		started = fixedStep(state, river, others, Config.STEP) or started
+		started = fixedStep(state, river, others, Config.STEP, now) or started
 	end
 	return started
 end

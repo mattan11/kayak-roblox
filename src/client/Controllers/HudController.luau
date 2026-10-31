@@ -3,6 +3,9 @@
 -- a UIScale każdej grupy dopasowuje go do ekranu (dla TS: jak `rem` zależny od wysokości okna).
 -- Nic poza przyciskami nie jest Active, więc dotyk przechodzi przez HUD do sterowania.
 --
+-- W Wodnej bitwie (Session.arena) nie ma zegara, paska trasy, rekordu, medalu ani top 10: stan walki rysuje ArenaController,
+-- a tu zostają odliczanie i ekran wyników z miejscami z ArenaResults.
+--
 -- Ranking: ReplicatedStorage.TopTimes (StringValue z JSON-em, Leaderboard na serwerze). Brak = bez kolumny top 10.
 
 local HttpService = game:GetService("HttpService")
@@ -41,6 +44,7 @@ local POP = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 local player = Players.LocalPlayer
 local river = Session.river
+local arena = Session.arena
 local startS = Config.START_DISTANCE
 local finishS = river.length - Config.FINISH_MARGIN
 
@@ -381,7 +385,10 @@ local function showNotice(key: any)
 end
 
 local function setRow(row: TextLabel, place: number, name: string, seconds: number?, own: boolean)
-	row.Text = string.format(Texts.resultRow, place, name) .. "  " .. RaceFormat.time(seconds)
+	row.Text = string.format(Texts.resultRow, place, name)
+	if not arena then
+		row.Text ..= "  " .. RaceFormat.time(seconds)
+	end
 	row.Font = if own then FONT_BOLD else FONT
 	row.TextColor3 = if own then COLORS.accent else COLORS.text
 	row.Visible = true
@@ -478,6 +485,36 @@ local function showResults(rows: { any })
 	panel.Visible = true
 end
 
+-- Wodna bitwa: miejsca zamiast czasów, kolumna top 10 pusta. Wiersze to { userId, name, place }, kolejność = miejsce.
+local function showArenaResults(rows: any)
+	local ownPlace: number? = nil
+	local shown = 0
+	if type(rows) == "table" then
+		for index, row in rows do
+			if type(row) == "table" then
+				local place = if type(row.place) == "number" then row.place else index
+				if row.userId == player.UserId then
+					ownPlace = place
+				end
+				if shown < RESULT_ROWS then
+					shown += 1
+					setRow(resultRows[shown], place, tostring(row.name), nil, row.userId == player.UserId)
+				end
+			end
+		end
+	end
+	hideRows(resultRows, shown + 1)
+	medalLabel.Text = if ownPlace then string.format(Texts.arena.ownPlace, ownPlace) else ""
+	medalLabel.TextColor3 = COLORS.accent
+	goalLabel.Text = ""
+	hideRows(topRows, 1)
+	topTitle.Visible = false
+	panelTitle.Text = Texts.arena.resultsTitle
+	resetActions()
+	votesLabel.Text = ""
+	panel.Visible = true
+end
+
 local function setBig(text: string)
 	if text == shownBig then
 		return
@@ -505,7 +542,7 @@ local function updateCenter(now: number)
 	elseif phase == "racing" then
 		local began = Session.raceBeganAt
 		if Session.state == nil then
-			message = Texts.nextRace -- wszedł, gdy nie można już dołączyć, a kajaka jeszcze nie ma
+			message = if arena then Texts.arena.nextRound else Texts.nextRace -- wszedł, gdy nie można już dołączyć, a kajaka jeszcze nie ma
 		elseif Session.finishTime then
 			message = string.format(Texts.finished, RaceFormat.time(Session.finishTime))
 			if isNewRecord then
@@ -573,9 +610,11 @@ end
 local function refresh()
 	local now = workspace:GetServerTimeNow()
 	updateCenter(now)
-	local seconds = raceTime(now)
-	timeLabel.Text = if seconds then RaceFormat.time(seconds) else ""
-	updateTrack()
+	if not arena then
+		local seconds = raceTime(now)
+		timeLabel.Text = if seconds then RaceFormat.time(seconds) else ""
+		updateTrack()
+	end
 	if noticeGroup.Visible and os.clock() >= noticeUntil then
 		noticeGroup.Visible = false
 	end
@@ -602,6 +641,10 @@ function HudController.start()
 	buildPanel()
 	buildNotice()
 	updateScale()
+	if arena then
+		timeLabel.Parent.Visible = false -- zegar, miejsce i rekord
+		trackGroup.Visible = false
+	end
 	gui.Parent = player:WaitForChild("PlayerGui")
 
 	local camera = workspace.CurrentCamera
@@ -621,8 +664,18 @@ function HudController.start()
 	end)
 
 	Remotes.get("TravelNotice").OnClientEvent:Connect(showNotice)
-	Remotes.get("RaceResults").OnClientEvent:Connect(showResults)
+	if arena then
+		Remotes.get("ArenaResults").OnClientEvent:Connect(showArenaResults)
+	else
+		Remotes.get("RaceResults").OnClientEvent:Connect(showResults)
+	end
 	Remotes.get("RaceVotes").OnClientEvent:Connect(showVotes)
+	-- Bitwa nie ma rekordów: etykieta tylko by myliła.
+	local function showRecordLabel()
+		recordLabel.Visible = workspace:GetAttribute("RaceMode") ~= "battle"
+	end
+	workspace:GetAttributeChangedSignal("RaceMode"):Connect(showRecordLabel)
+	showRecordLabel()
 	Remotes.get("PersonalBest").OnClientEvent:Connect(function(best: number?, newRecord: boolean?)
 		recordLabel.Text = if best then string.format(Texts.record, RaceFormat.time(best)) else Texts.noRecord
 		if newRecord then

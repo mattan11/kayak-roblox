@@ -5,8 +5,11 @@
 --   "phase" (phase, endsAt)       zmiana fazy wyścigu
 --   "reset" ()                    nowy stan fizyki po Reset
 --   "kayakRemoved" (model)        kajak zniknął, sprzątamy rekordy
+--   "arenaState" ()               nowy stan Wodnej bitwy: Session.arenaRadius, Session.arenaAlive
 --
 -- W wiosce rzeką jest Lake, a faza to stałe "free": bez zegara i mety, reszta kontrolerów działa tak samo.
+-- W Wodnej bitwie (RiverId == "Arena") rzeką też jest Lake, a fazę niesie ArenaState zamiast RaceState. Faza walki
+-- nazywa się tu "racing", więc sterowanie i HUD nie potrzebują osobnej gałęzi.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -32,17 +35,47 @@ local function waitForRiverId(): string
 	end
 end
 
+local ARENA_ID = "Arena"
+local riverId: string? = if inVillage then nil else waitForRiverId()
+
+-- Układ areny w pcall: uszkodzony lub brakujący plik nie może zatrzymać całego klienta (na tym require czekają kontrolery).
+-- ArenaLayout ma pola jak LakeLayout, a spawn i heading nie są klientowi potrzebne, bo miejsce startu podaje Reset.
+local function loadArena(content: Instance): any?
+	local module = content:FindFirstChild("ArenaLayout")
+	if module == nil then
+		warn("[Session] brak content/ArenaLayout")
+		return nil
+	end
+	local ok, result = pcall(function()
+		return Lake.new(require(module :: ModuleScript) :: any)
+	end)
+	if not ok then
+		warn(`[Session] ArenaLayout: {result}`)
+		return nil
+	end
+	return result
+end
+
 local function loadWater(): any
 	local content = Shared:WaitForChild("content")
 	if inVillage then
 		return Lake.new(require(content:WaitForChild("LakeLayout")))
 	end
+	if riverId == ARENA_ID then
+		local arena = loadArena(content)
+		if arena then
+			return arena
+		end
+	end
 	local rivers = content:WaitForChild("rivers")
-	return River.new(require(rivers:FindFirstChild(waitForRiverId()) or rivers:WaitForChild(Config.ACTIVE_RIVER)))
+	return River.new(require(rivers:FindFirstChild(riverId :: string) or rivers:WaitForChild(Config.ACTIVE_RIVER)))
 end
 
 local Session = {
 	river = loadWater(),
+	arena = riverId == ARENA_ID, -- Wodna bitwa: wiadomo od razu, jeszcze przed pierwszym stanem z serwera
+	arenaRadius = nil :: number?, -- promień strefy wg ostatniego ArenaState
+	arenaAlive = nil :: number?, -- liczba żywych wg ostatniego ArenaState
 	phase = if inVillage then "free" else "waiting",
 	phaseEndsAt = 0,
 	state = nil :: any, -- KayakPhysics.State; nil do pierwszego Reset

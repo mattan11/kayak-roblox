@@ -221,7 +221,7 @@ function RaceLogic:sample(id: number, position: Vector2, s: number, outside: num
 	-- a średnia prędkość i tak nie przekroczy limitu.
 	local dt = now - racer.lastAt
 	local moved = (position - racer.lastPosition).Magnitude
-	racer.allowance = math.min(Config.JUMP_ALLOWANCE, racer.allowance + Config.MAX_KAYAK_SPEED * dt) - moved
+	racer.allowance = math.min(Config.JUMP_ALLOWANCE, racer.allowance + (self.maxSpeed or Config.MAX_KAYAK_SPEED) * dt) - moved
 	if racer.allowance < 0 or outside > Config.OFF_RIVER_TOLERANCE then
 		racer.invalid = true
 		return "invalid"

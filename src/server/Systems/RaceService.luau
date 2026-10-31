@@ -1,6 +1,8 @@
 -- Wyścig: łączy czystą logikę (RaceLogic) ze światem. Co RACE_SAMPLE_INTERVAL czyta pozycje Hull, liczy `s` przez
 -- River:query, karmi nimi RaceLogic i wysyła zdarzenia. Sam niczego nie decyduje o fazach ani czasach.
 -- (Dla TS: „kontroler” nad reducerem: pętla jak setInterval, efekty uboczne tutaj, logika w czystym module.)
+-- W trybie Bitwa fazy i wyniki na ekranie są te same, odpada tylko wszystko, co zostaje po przejeździe (rekord, medal, duch, ranking).
+-- W trybie arena nie ma wyścigu: init() i start() wychodzą od razu, fazy i przyciski obsługuje ArenaService.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,6 +24,7 @@ local RaceService = {}
 
 local river: any -- oba ustawiane w init(): rzeka powstaje dopiero w RiverBuilder.init()
 local race: any
+local battle = false -- tryb Bitwa, ustawiane w init()
 local hints: { [number]: number } = {} -- userId → ostatni odcinek rzeki (szybsze query, bez skoków między zakolami)
 
 local raceState = Remotes.get("RaceState")
@@ -42,11 +45,16 @@ local function enroll(player: Player, now: number)
 	hints[player.UserId] = q.index
 	KayakService.place(player, position, heading)
 	resetEvent:FireClient(player, position.X, position.Y, heading)
-	GhostService.prepare(player)
+	if not battle then
+		GhostService.prepare(player)
+	end
 end
 
 local function onFinished(player: Player, time: number)
 	KayakService.setFinished(player)
+	if battle then
+		return
+	end
 	PlayerData.recordFinish(player, time)
 	Analytics.raceFinished(player, time)
 	GhostService.finish(player, time)
@@ -64,7 +72,7 @@ local function sampleRacers(now: number)
 			local q = river:query(position, if jumped then nil else hints[id])
 			hints[id] = q.index
 			local outcome = race:sample(id, position, q.s, math.abs(q.lateral) - q.halfWidth, now)
-			if racer.startedAt and outcome ~= "invalid" then
+			if racer.startedAt and outcome ~= "invalid" and not battle then
 				GhostService.sample(id, now - racer.startedAt, hull, outcome == "finished")
 			end
 			if outcome == "finished" then
@@ -86,13 +94,15 @@ local function onPhase(phase: RaceLogic.Phase, now: number)
 		local rows = race:results()
 		raceResults:FireAllClients(rows)
 		-- Wygrana liczy się tylko w wyścigu z kimś: solo każdy byłby pierwszy.
-		if #rows >= 2 then
+		if #rows >= 2 and not battle then
 			local winner = Players:GetPlayerByUserId(rows[1].userId)
 			if winner then
 				PlayerData.addWin(winner)
 			end
 		end
-		task.spawn(Leaderboard.refresh)
+		if not battle then
+			task.spawn(Leaderboard.refresh)
+		end
 	end
 end
 
@@ -113,9 +123,22 @@ local function onRaceAction(player: Player, action: any)
 	end
 end
 
+-- Odczyt dla BattleService: bieżąca faza i tabela zawodników. Tylko do czytania, zapis należy do RaceLogic.
+-- Gotowe dopiero po init(), czyli od start() każdego systemu.
+function RaceService.snapshot(): (RaceLogic.Phase, { [number]: RaceLogic.Racer })
+	return race.phase, race.racers
+end
+
 function RaceService.init()
+	if RiverBuilder.mode == "arena" then
+		return
+	end
 	river = RiverBuilder.river
+	battle = RiverBuilder.mode == "battle"
 	race = RaceLogic.new(Config.START_LINE, river.length - Config.FINISH_MARGIN)
+	if RiverBuilder.mode == "battle" then
+		race.maxSpeed = Config.BATTLE_MAX_SPEED -- przyspieszenie ze skrzynki nie może wyglądać jak oszustwo
+	end
 	if RiverBuilder.expected then
 		race:expectPlayers(RiverBuilder.expected)
 	end
@@ -126,6 +149,9 @@ function RaceService.init()
 end
 
 function RaceService.start()
+	if RiverBuilder.mode == "arena" then
+		return
+	end
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	-- Po teleporcie gracz bywa na serwerze, zanim skończy się budowa świata.
 	for _, player in Players:GetPlayers() do

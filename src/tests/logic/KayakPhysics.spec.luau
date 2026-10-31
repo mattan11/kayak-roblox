@@ -155,6 +155,62 @@ return function(t)
 			print("[bot górski] czas", elapsed, "machnięć", state.strokes)
 			t.expect(elapsed).toBeLessThan(240)
 		end)
+		t.it("ogłuszony kajak nie wiosłuje i płynie z prądem", function()
+			local stunned, drift = start(), start()
+			stunned.stunUntil = os.clock() + 60
+			run(stunned, 4, function()
+				paddle(stunned)
+			end)
+			run(drift, 4)
+			t.expect(stunned.strokes).toBe(0)
+			t.expect(stunned.strokeSide).toBe(nil)
+			t.expect(math.abs(progress(stunned) - progress(drift))).toBeLessThan(0.5)
+		end)
+		t.it("ogłuszenie przerywa trwające machnięcie", function()
+			local state = start()
+			KayakPhysics.requestStroke(state, 1)
+			run(state, 0.2)
+			t.expect(state.strokeSide).toBe(1)
+			state.stunUntil = os.clock() + 60
+			run(state, 0.1)
+			t.expect(state.strokeSide).toBe(nil)
+		end)
+		t.it("ogłuszony nie hamuje wbiciem, ale wbicie zostaje na czas po ogłuszeniu", function()
+			local braced, free = start(), start()
+			braced.velocity = Vector2.new(0, -40)
+			free.velocity = Vector2.new(0, -40)
+			braced.stunUntil = os.clock() + 60
+			free.stunUntil = braced.stunUntil
+			KayakPhysics.setBrace(braced, 1)
+			run(braced, 0.5)
+			run(free, 0.5)
+			t.expect((braced.position - free.position).Magnitude).toBeLessThan(0.01)
+			t.expect(braced.brace).toBe(1)
+			braced.stunUntil = 0
+			free.stunUntil = 0
+			run(braced, 0.5)
+			run(free, 0.5)
+			t.expect(braced.velocity.Magnitude).toBeLessThan(free.velocity.Magnitude)
+		end)
+		t.it("po ogłuszeniu kajak znów wiosłuje", function()
+			local state = start()
+			state.stunUntil = os.clock() - 1
+			KayakPhysics.requestStroke(state, 1)
+			run(state, 0.1)
+			t.expect(state.strokes).toBe(1)
+		end)
+		t.it("przyspieszenie mocniej ciągnie, tylko gdy trwa", function()
+			local boosted, normal, expired = start(), start(), start()
+			boosted.boostUntil = os.clock() + 60
+			expired.boostUntil = os.clock() - 1
+			for _, state in { boosted, normal, expired } do
+				run(state, 4, function()
+					paddle(state)
+				end)
+			end
+			t.expect(progress(boosted)).toBeGreaterThan(progress(normal) + 2)
+			t.expect(progress(expired)).toBe(progress(normal))
+		end)
 		t.it("wynik nie zależy od FPS", function()
 			local a, b = start(), start()
 			for _ = 1, 120 do

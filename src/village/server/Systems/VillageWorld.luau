@@ -1,7 +1,8 @@
 -- Świat wioski: jezioro, światło, domki, drzewa, ognisko, tablice i boje. Wszystko powstaje raz, w init().
 -- Gracz nie chodzi, tylko pływa kajakiem, więc nic poza terenem nie ma kolizji: kajak to punkt 2D (ARCHITECTURE.md), a boje
 -- do omijania liczy fizyka z LakeLayout.obstacles. Tu powstają tylko ich bryły, z tych samych danych.
--- Inne systemy biorą stąd workspace.Piers.QueueZone i workspace.Boards.ResultsBoard (RiverBoards dopisuje na niej wyniki).
+-- Inne systemy biorą stąd części QueueZone z workspace.Piers (po jednej na strefę, tryb w atrybucie Mode) i
+-- workspace.Boards.ResultsBoard (RiverBoards dopisuje na niej wyniki).
 -- (Dla TS: moduł z efektem ubocznym `init()`, który buduje „DOM” raz przy starcie, a LakeLayout to jego dane wejściowe.)
 
 local Lighting = game:GetService("Lighting")
@@ -33,7 +34,7 @@ local HILL_DISTANCE = 222
 local HILL_STEP = 60
 local HILL_CENTER_Y = -6
 
-local HOUSE_DISTANCE = 166 -- od środka jeziora: tuż za plażą, widać je z wody
+local HOUSE_DISTANCE = SHORE + 14 -- od środka jeziora: tuż za plażą, widać je z wody
 local HOUSE_SCALE = 1.4
 local TREE_RING_WIDTH = 54 -- drzewa w pasie tej szerokości za plażą
 local ZONE_HEIGHT = 24 -- strefa kolejki: wysoka, obejmuje cały kajak z wioślarzem
@@ -44,7 +45,6 @@ local GRASS_COLOR = Color3.fromRGB(92, 148, 72)
 local SAND_COLOR = Color3.fromRGB(214, 196, 146)
 local TRUNK_COLOR = Color3.fromRGB(99, 70, 46)
 local PLANK_COLOR = Color3.fromRGB(148, 110, 72)
-local YELLOW_COLOR = Color3.fromRGB(255, 214, 40)
 local ORANGE_COLOR = Color3.fromRGB(244, 128, 44)
 local RED_COLOR = Color3.fromRGB(224, 60, 52)
 local WHITE_COLOR = Color3.fromRGB(245, 245, 240)
@@ -62,7 +62,7 @@ local DIFFICULTY_COLORS = {
 }
 local LEAF_COLORS = { Color3.fromRGB(70, 128, 62), Color3.fromRGB(88, 145, 60), Color3.fromRGB(58, 112, 72) }
 
--- Domki wokół brzegu, frontem do jeziora. Kąt w stopniach od +X; północ (270°) zostaje wolna dla tablic przy strefie startu.
+-- Domki wokół brzegu, frontem do jeziora. Kąt w stopniach od +X; północ (270°) zostaje wolna dla tablic przy strefach startu.
 local HOUSES = {
 	{ angle = 315, wall = Color3.fromRGB(196, 168, 128), roof = Color3.fromRGB(150, 74, 56) },
 	{ angle = 350, wall = Color3.fromRGB(176, 144, 110), roof = Color3.fromRGB(84, 96, 112) },
@@ -359,7 +359,7 @@ local function buildRiverList(board: Part)
 	end
 
 	line("Rzeki", 0.05, 0.03, 0.9, 0.15, TITLE_COLOR, Enum.TextXAlignment.Center, Enum.Font.GothamBlack)
-	line("Wpłyń między żółte boje i wybierz", 0.05, 0.18, 0.9, 0.07, TEXT_COLOR, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
+	line("Wpłyń w żółty lub czerwony ring i wybierz", 0.05, 0.18, 0.9, 0.07, TEXT_COLOR, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
 	local top, height = 0.28, 0.69 / #RiverCatalog
 	for index, entry in RiverCatalog do
 		local y = top + (index - 1) * height + height * 0.1
@@ -370,7 +370,37 @@ local function buildRiverList(board: Part)
 	gui.Parent = board
 end
 
--- Obie tablice na plaży, po bokach strefy startu, zwrócone do środka jeziora: kajak widzi je od razu po starcie.
+-- Tablica strefy: kolor ringu i ciemny napis, więc rozpoznać ją można z daleka, zanim da się przeczytać słowo.
+local function buildZoneSign(parent: Instance, zone: any)
+	local board = buildBoard(parent, `Sign_{zone.id}`, zone.sign.X, zone.sign.Y, LakeLayout.signWidth, LakeLayout.signHeight, LAKE_CENTER)
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = Config.VILLAGE_BOARD_PIXELS
+	gui.LightInfluence = 0
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.fromScale(1, 1)
+	title.BackgroundColor3 = zone.color
+	title.BorderSizePixel = 0
+	title.Font = Enum.Font.GothamBlack
+	title.TextScaled = true
+	title.TextColor3 = BOARD_COLOR
+	title.Text = zone.label
+	title.Parent = gui
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0.04, 0)
+	padding.PaddingRight = UDim.new(0.04, 0)
+	padding.PaddingTop = UDim.new(0.08, 0)
+	padding.PaddingBottom = UDim.new(0.08, 0)
+	padding.Parent = title
+
+	gui.Parent = board
+end
+
+-- Obie tablice na plaży, po bokach strefy wyścigu, zwrócone do środka jeziora: kajak widzi je od razu po starcie.
 local function buildBoards(parent: Instance)
 	local riverBoard = buildBoard(
 		parent,
@@ -420,18 +450,17 @@ local function buildBuoys(parent: Instance)
 	end
 end
 
--- Ring z żółtych boi i lekko żółta woda w środku. Boje ringu nie są przeszkodami: przez ring wpływa się z każdej strony.
-local function buildZoneRing(parent: Instance)
-	local zone = LakeLayout.zone
+-- Ring z boi w kolorze strefy i lekko zabarwiona woda w środku. Boje ringu nie są przeszkodami: przez ring wpływa się z każdej strony.
+local function buildZoneRing(parent: Instance, zone: any)
 	local center = Vector3.new(zone.position.X, 0, zone.position.Y)
 	local count = Config.VILLAGE_ZONE_BUOYS
 	for index = 1, count do
 		local angle = index / count * 2 * math.pi
 		local spot = center + Vector3.new(math.cos(angle), 0, math.sin(angle)) * zone.radius
 		if index % ZONE_MAST_EVERY == 0 then
-			buoy(parent, Vector2.new(spot.X, spot.Z), 1.5, YELLOW_COLOR, YELLOW_COLOR)
+			buoy(parent, Vector2.new(spot.X, spot.Z), 1.5, zone.color, zone.color)
 		else
-			ball(parent, 3, spot + Vector3.yAxis * 0.4, YELLOW_COLOR)
+			ball(parent, 3, spot + Vector3.yAxis * 0.4, zone.color)
 		end
 	end
 
@@ -439,7 +468,7 @@ local function buildZoneRing(parent: Instance)
 		parent,
 		Vector3.new(0.2, zone.radius * 2, zone.radius * 2),
 		CFrame.new(center + Vector3.yAxis * 0.15) * CFrame.Angles(0, 0, math.pi / 2), -- walec leży wzdłuż X, kładziemy go płasko
-		YELLOW_COLOR,
+		zone.color,
 		Enum.Material.SmoothPlastic,
 		false
 	)
@@ -448,11 +477,12 @@ local function buildZoneRing(parent: Instance)
 end
 
 -- Strefa kolejki, bezpośrednio w workspace.Piers. Prostopadłościan, bo RiverPicker i MatchService sprawdzają pudełko, a nie koło.
-local function buildQueueZone(parent: Instance)
-	local zone = LakeLayout.zone
+-- Tryb niesie atrybut Mode: wszystkie części nazywają się tak samo, a kod pyta tylko „w której stoję i jaki ma tryb”.
+local function buildQueueZone(parent: Instance, zone: any)
 	local side = zone.radius * ZONE_BOX
 	local part = Instance.new("Part")
 	part.Name = "QueueZone"
+	part:SetAttribute("Mode", zone.mode)
 	part.Anchored = true
 	part.CanCollide = false
 	part.CanTouch = true
@@ -496,8 +526,13 @@ function VillageWorld.init()
 
 	buildBoards(folder("Boards"))
 	buildBuoys(folder("Buoys"))
-	buildZoneRing(folder("StartZone"))
-	buildQueueZone(folder("Piers"))
+	local startZones = folder("StartZone")
+	local piers = folder("Piers")
+	for _, zone in LakeLayout.zones do
+		buildZoneRing(startZones, zone)
+		buildZoneSign(startZones, zone)
+		buildQueueZone(piers, zone)
+	end
 	buildSpawn()
 end
 

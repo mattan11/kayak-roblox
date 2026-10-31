@@ -22,10 +22,15 @@ return {
 	pickerSoon = "Wkrótce",
 	pickerMedalTime = "● %s", -- próg medalu na kafelku, kolor mówi który
 
-	queueTitle = "%s · %s", -- nazwa rzeki · trudność
+	pickerNoMedals = "Bez medali i rekordów", -- na kafelku w strefie Bitwa
+	arenaGo = "Do bitwy", -- przycisk w strefie Wodnej bitwy: bez wyboru rzeki, od razu kolejka
+	modes = { race = "Wyścig", battle = "Bitwa", arena = "Wodna bitwa" },
+
+	queueTitle = "%s · %s · %s", -- nazwa rzeki · trudność · tryb
 	queueStatus = "%d/%d, start za %d s",
 	queueWaiting = "%d/%d",
 	queueJoining = "Dołączam do kolejki…", -- do pierwszego QueueState, w którym już jesteśmy (serwer publikuje co 2 s)
+	queueNeedPlayers = "Potrzeba %d graczy", -- Wodna bitwa: gracz czeka sam
 	queueReady = " · gotowi %d/%d",
 	queueWorld = "Liczymy graczy z całego świata",
 	queueGo = "Płyń teraz",

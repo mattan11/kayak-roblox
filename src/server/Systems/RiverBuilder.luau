@@ -6,17 +6,22 @@
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Lake = require(Shared:WaitForChild("Lake"))
 local River = require(Shared:WaitForChild("River"))
+local ArenaLayout = require(Shared:WaitForChild("content"):WaitForChild("ArenaLayout"))
 
 local RaceTicket = require(script.Parent.Parent.RaceTicket)
+local ArenaBuilder = require(script.Parent.ArenaBuilder)
 
 local RiverBuilder = {}
 
-RiverBuilder.river = nil :: any -- gotowe po init()
+RiverBuilder.river = nil :: any -- gotowe po init(); w trybie arena to Lake o id "Arena" (ten sam interfejs, inne systemy czytają tylko .id)
 RiverBuilder.expected = nil :: number? -- ilu graczy wysłała wioska; nil = na nikogo nie czekamy (Studio, brak wpisu)
+RiverBuilder.mode = "race" -- "race" | "battle" | "arena"; ostateczna wartość po init(), do klienta idzie atrybutem workspace.RaceMode
 
 local rivers = Shared:WaitForChild("content"):WaitForChild("rivers")
 local river: any = nil
@@ -361,19 +366,32 @@ local function chooseRiver()
 		local module = rivers:FindFirstChild(name)
 		return module ~= nil and module:IsA("ModuleScript")
 	end
-	local name, expected = RaceTicket.parse(RaceTicket.read(), isKnown)
-	riverData = require(rivers:WaitForChild(name or Config.ACTIVE_RIVER))
-	river = River.new(riverData)
-	RiverBuilder.river, RiverBuilder.expected = river, expected
+	local name, expected, mode = RaceTicket.parse(RaceTicket.read(), isKnown)
+	RiverBuilder.expected = expected
+	RiverBuilder.mode = RaceTicket.resolveMode(mode, RunService:IsStudio())
+	if RiverBuilder.mode == "arena" then
+		river = Lake.new(ArenaLayout)
+		river.id = Config.ARENA_RIVER
+	else
+		riverData = require(rivers:WaitForChild(name or Config.ACTIVE_RIVER))
+		river = River.new(riverData)
+	end
+	RiverBuilder.river = river
 end
 
 function RiverBuilder.init()
 	chooseRiver()
-	-- Klient buduje swoją rzekę z tego atrybutu (Session.luau). Id rzeki = nazwa pliku w content/rivers.
+	-- Klient buduje swoją rzekę z tego atrybutu (Session.luau). Id rzeki = nazwa pliku w content/rivers, a w trybie arena "Arena".
 	workspace:SetAttribute("RiverId", river.id)
+	workspace:SetAttribute("RaceMode", RiverBuilder.mode)
 	local started = os.clock()
-	buildTerrain()
 	buildLighting()
+	if RiverBuilder.mode == "arena" then
+		ArenaBuilder.build(ArenaLayout)
+		print(string.format("[RiverBuilder] jezioro bitwy gotowe w %.1f s", os.clock() - started))
+		return
+	end
+	buildTerrain()
 
 	-- Stałe ziarno: ta sama rzeka wygląda tak samo na każdym serwerze.
 	local random = Random.new(2026)

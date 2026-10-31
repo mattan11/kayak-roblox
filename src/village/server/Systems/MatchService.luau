@@ -3,8 +3,12 @@
 -- rezerwuje serwer i ogłasza grupę. Każdy serwer teleportuje SWOICH graczy, każdego osobno.
 -- (Dla TS: bilety to kolejka w Redisie, lider to worker z lockiem, MessagingService to pub/sub.)
 --
+-- Każda rzeka ma dwie kolejki, „race” i „battle”: osobna mapa biletów, ale ten sam lider i ta sama reguła startu.
+-- Do tego jedna kolejka Wodnej bitwy, `Arena_arena`, bez rzeki i z minimum 2 graczy. O trybie decyduje strefa, w której gracz stoi:
+-- atrybut `Mode` na Part QueueZone. Strefa bez atrybutu to "race", a ze złą wartością nie przyjmuje nikogo.
+--
 -- Budżet MemoryStore: limit gry to 1000 + 120 × gracze jednostek na minutę. Na serwer idzie ok. 40 na blokadę, lider dokłada
--- 30 na rzekę plus 30 na bilet, a każdy bilet 12 na odnawianie. Limit odczytu GetRangeAsync to 200 pozycji, czyli z zapasem.
+-- 30 na kolejkę plus 30 na bilet, a każdy bilet 12 na odnawianie. Limit odczytu GetRangeAsync to 200 pozycji, czyli z zapasem.
 --
 -- Pewne rzeczy są tu celowe:
 --  - MessagingService jest „best effort”, więc Match wysyłamy dwa razy (powtórkę odsiewa pole `at`), a gdy obie wiadomości
@@ -14,7 +18,7 @@
 --    na telefonie) nie może zabrać reszcie ponowień. Kod dostępu kieruje wszystkich na ten sam serwer.
 --  - Serwer spływu nie czeka na spóźnialskich dłużej niż RACE_GATHER_TIME: wpis `expected` to tylko podpowiedź.
 --
--- Klient widzi swój stan przez atrybuty gracza (replikują się same): QueueRiver, QueueReady, QueueTraveling.
+-- Klient widzi swój stan przez atrybuty gracza (replikują się same): QueueRiver, QueueMode, QueueReady, QueueTraveling.
 
 local MemoryStoreService = game:GetService("MemoryStoreService")
 local MessagingService = game:GetService("MessagingService")
@@ -34,19 +38,22 @@ local MatchService = {}
 type Entry = {
 	ticket: MatchQueue.Ticket,
 	river: string,
+	mode: MatchQueue.Mode,
+	key: string, -- MatchQueue.queueKey(river, mode)
 	written: boolean, -- bilet jest (albo właśnie trafia) w MemoryStore
 	dirty: boolean, -- zmiana czeka na zapis
 	renewAt: number,
 	takenAt: number?, -- od kiedy wiemy, że lider zabrał bilet, a Match jeszcze nie doszedł
 }
 type Trip = { attempts: number, deadline: number, options: TeleportOptions, retrying: boolean }
-type Removal = { river: string, userId: number }
+type Removal = { key: string, userId: number }
+type Queue = { river: string, mode: MatchQueue.Mode }
 
 local STUDIO = RunService:IsStudio()
 local LEADER_KEY = "Leader"
 local EMPTY: MatchQueue.State = { count = 0, endsAt = nil, ready = 0 }
 
-local rivers: { string } = {} -- dostępne rzeki, z RiverCatalog
+local queues: { [string]: Queue } = {} -- queueKey → kolejka; po dwie na każdą dostępną rzekę z RiverCatalog
 local entries: { [number]: Entry } = {} -- bilety graczy z tego serwera; to one decydują, kogo teleportujemy
 local trips: { [number]: Trip } = {} -- userId → podróż w toku
 local removals: { Removal } = {} -- bilety do usunięcia z MemoryStore
@@ -76,11 +83,11 @@ local function quietWarn(topic: string, message: any)
 	end
 end
 
-local function ticketMap(river: string): MemoryStoreSortedMap
-	local map = ticketMaps[river]
+local function ticketMap(key: string): MemoryStoreSortedMap
+	local map = ticketMaps[key]
 	if map == nil then
-		map = MemoryStoreService:GetSortedMap(Config.MATCH_TICKET_PREFIX .. river)
-		ticketMaps[river] = map
+		map = MemoryStoreService:GetSortedMap(Config.MATCH_TICKET_PREFIX .. key)
+		ticketMaps[key] = map
 	end
 	return map
 end
@@ -91,6 +98,7 @@ local function mark(id: number)
 	if player then
 		local entry = entries[id]
 		player:SetAttribute("QueueRiver", if entry then entry.river else nil)
+		player:SetAttribute("QueueMode", if entry then entry.mode else nil)
 		player:SetAttribute("QueueReady", if entry and entry.ticket.ready then true else nil)
 		player:SetAttribute("QueueTraveling", if trips[id] then true else nil)
 	end
@@ -104,7 +112,7 @@ local function forget(id: number, alreadyGone: boolean?)
 	end
 	entries[id] = nil
 	if entry.written and not alreadyGone and not health.down then
-		table.insert(removals, { river = entry.river, userId = id })
+		table.insert(removals, { key = entry.key, userId = id })
 	end
 	mark(id)
 end
@@ -116,11 +124,12 @@ local function notice(id: number, textKey: string)
 	end
 end
 
-local function sendState(river: string, state: MatchQueue.State)
-	local last = sent[river]
+local function sendState(key: string, state: MatchQueue.State)
+	local last = sent[key]
 	if last.count ~= state.count or last.endsAt ~= state.endsAt or last.ready ~= state.ready then
-		sent[river] = state
-		queueState:FireAllClients(river, state.count, state.endsAt, state.ready)
+		sent[key] = state
+		local queue = queues[key]
+		queueState:FireAllClients(queue.river, state.count, state.endsAt, state.ready, queue.mode)
 	end
 end
 
@@ -182,7 +191,7 @@ local function onMatch(data: any)
 	end
 	for _, id in match.userIds do
 		local entry = entries[id]
-		if entry and entry.river == match.river and entry.ticket.joinedAt <= match.at then
+		if entry and entry.river == match.river and entry.mode == match.mode and entry.ticket.joinedAt <= match.at then
 			forget(id, true)
 			local player = Players:GetPlayerByUserId(id)
 			if player and match.code then
@@ -199,12 +208,12 @@ end
 -- Serwer zarezerwowany + wpis w MemoryStore. Wpis musi powstać PRZED teleportem, bo spływ czyta go zaraz po starcie.
 -- ReserveServerAsync i ReservedServerAccessCode dokumentacja oznacza jako przestarzałe, ale tylko ta para ma potwierdzony
 -- związek z game.PrivateServerId, na którym opiera się odczyt wpisu. Migracja na ReservedServerId dotyczy tylko tej funkcji.
-local function reserve(river: string, expected: number): string?
+local function reserve(river: string, mode: MatchQueue.Mode, expected: number): string?
 	for attempt = 1, Config.TRAVEL_TRIES do
 		local ok, result = pcall(function()
 			local code, privateServerId = TeleportService:ReserveServerAsync(Places.placeId("race"))
 			local map = MemoryStoreService:GetSortedMap(Config.RACE_TICKET_MAP)
-			map:SetAsync(privateServerId, { river = river, expected = expected }, Config.RACE_TICKET_TTL)
+			map:SetAsync(privateServerId, { river = river, expected = expected, mode = mode }, Config.RACE_TICKET_TTL)
 			return code
 		end)
 		if ok then
@@ -233,8 +242,9 @@ local function publishMatch(data: any)
 end
 
 -- Bilety usuwamy od razu, w pętli lidera (następny obieg ich już nie zobaczy), a rezerwacja idzie obok, żeby nie wstrzymywać reszty rzek.
-local function startGroup(river: string, group: { MatchQueue.Ticket })
-	local map = ticketMap(river)
+local function startGroup(key: string, group: { MatchQueue.Ticket })
+	local map = ticketMap(key)
+	local queue = queues[key]
 	local userIds: { number } = {}
 	for _, ticket in group do
 		table.insert(userIds, ticket.userId)
@@ -246,8 +256,8 @@ local function startGroup(river: string, group: { MatchQueue.Ticket })
 		end
 	end
 	task.spawn(function()
-		local code = reserve(river, #userIds)
-		local data = { river = river, userIds = userIds, code = code, at = now() }
+		local code = reserve(queue.river, queue.mode, #userIds)
+		local data = { river = queue.river, mode = queue.mode, userIds = userIds, code = code, at = now() }
 		onMatch(data) -- swoich graczy obsługujemy od razu, reszta dowie się z wiadomości
 		publishMatch(data)
 	end)
@@ -259,10 +269,10 @@ local function isLeader(): boolean
 end
 
 local function leaderTick()
-	local byRiver: { [string]: { MatchQueue.Ticket } } = {}
-	for _, river in rivers do
+	local byQueue: { [string]: { MatchQueue.Ticket } } = {}
+	for key in queues do
 		local ok, items = pcall(function()
-			return ticketMap(river):GetRangeAsync(Enum.SortDirection.Ascending, Config.MATCH_RANGE)
+			return ticketMap(key):GetRangeAsync(Enum.SortDirection.Ascending, Config.MATCH_RANGE)
 		end)
 		if MatchQueue.report(health, ok) then
 			MatchService._modeChanged()
@@ -278,18 +288,18 @@ local function leaderTick()
 				table.insert(tickets, ticket)
 			end
 		end
-		byRiver[river] = tickets
+		byQueue[key] = tickets
 	end
 
 	local time = now()
 	local states: { [string]: MatchQueue.State } = {}
-	for river, tickets in MatchQueue.dedupe(byRiver) do
-		local decision = MatchQueue.decide(tickets, time)
-		states[river] = decision.state
+	for key, tickets in MatchQueue.dedupe(byQueue) do
+		local decision = MatchQueue.decide(tickets, time, MatchQueue.minPlayers(queues[key].mode))
+		states[key] = decision.state
 		if decision.group then
-			startGroup(river, decision.group)
+			startGroup(key, decision.group)
 		end
-		sendState(river, decision.state)
+		sendState(key, decision.state)
 	end
 
 	local ok, err = pcall(function()
@@ -302,21 +312,21 @@ end
 
 -- Tryb lokalny: ten serwer jest liderem w pamięci, bez teleportu.
 local function localTick()
-	local byRiver: { [string]: { MatchQueue.Ticket } } = {}
-	for _, river in rivers do
-		byRiver[river] = {}
+	local byQueue: { [string]: { MatchQueue.Ticket } } = {}
+	for key in queues do
+		byQueue[key] = {}
 	end
 	for _, entry in entries do
-		table.insert(byRiver[entry.river], entry.ticket)
+		table.insert(byQueue[entry.key], entry.ticket)
 	end
 	local time = now()
-	for river, tickets in byRiver do
-		local decision = MatchQueue.decide(tickets, time)
+	for key, tickets in byQueue do
+		local decision = MatchQueue.decide(tickets, time, MatchQueue.minPlayers(queues[key].mode))
 		for _, ticket in decision.group or {} do
 			forget(ticket.userId, true)
 			notice(ticket.userId, if RunService:IsStudio() then "travel.studio" else "travel.unavailable")
 		end
-		sendState(river, decision.state)
+		sendState(key, decision.state)
 	end
 end
 
@@ -325,8 +335,8 @@ local function onState(data: any)
 	if states == nil or health.down then
 		return
 	end
-	for _, river in rivers do
-		sendState(river, states[river] or EMPTY)
+	for key in queues do
+		sendState(key, states[key] or EMPTY)
 	end
 end
 
@@ -334,7 +344,7 @@ end
 
 -- `written` ustawiamy przed wywołaniem, które yielduje: wyjście gracza w trakcie zapisu ma dodać usunięcie, a pętla zrobi je później.
 local function writeEntry(id: number, entry: Entry)
-	local map = ticketMap(entry.river)
+	local map = ticketMap(entry.key)
 	local key = tostring(id)
 	entry.dirty = false
 	local ok: boolean, result: any
@@ -376,7 +386,7 @@ local function syncTickets()
 	removals = {}
 	for _, removal in batch do
 		local ok, err = pcall(function()
-			ticketMap(removal.river):RemoveAsync(tostring(removal.userId))
+			ticketMap(removal.key):RemoveAsync(tostring(removal.userId))
 		end)
 		if not ok then
 			quietWarn("usuwanie biletu", err) -- zostanie najwyżej na MATCH_TICKET_TTL
@@ -464,8 +474,9 @@ end
 
 -- Gracz i strefa -----------------------------------------------------------------------------------------------------------
 
--- Czy gracz stoi w strefie kolejki? Świat może jeszcze nie istnieć, dlatego FindFirstChild w każdym obiegu.
-local function inZone(player: Player): boolean
+-- Czy gracz stoi w strefie tego trybu? Świat może jeszcze nie istnieć, dlatego FindFirstChild w każdym obiegu.
+-- Atrybut może mieć dowolny typ, więc przechodzi przez parseMode jak dane z sieci. (Dla TS: `zone.mode === mode` po safeParse.)
+local function inZone(player: Player, mode: MatchQueue.Mode): boolean
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local folder = workspace:FindFirstChild("Piers")
@@ -473,7 +484,7 @@ local function inZone(player: Player): boolean
 		return false
 	end
 	for _, zone in folder:GetChildren() do
-		if zone:IsA("BasePart") and zone.Name == "QueueZone" then
+		if zone:IsA("BasePart") and zone.Name == "QueueZone" and MatchQueue.parseMode(zone:GetAttribute("Mode")) == mode then
 			local point = zone.CFrame:PointToObjectSpace(root.Position)
 			local half = zone.Size / 2
 			if math.abs(point.X) <= half.X and math.abs(point.Y) <= half.Y and math.abs(point.Z) <= half.Z then
@@ -499,21 +510,25 @@ local function scan(time: number)
 				warn(`[Match] {player.Name}: bilet zabrany, ale Match nie doszedł`)
 				forget(id, true)
 				notice(id, "travel.failed")
-			elseif not inZone(player) then
+			elseif not inZone(player, entry.mode) then
 				forget(id)
 			end
 		end
 	end
 end
 
-local function isRiver(river: any): boolean
-	return type(river) == "string" and table.find(rivers, river) ~= nil
-end
-
-local function join(player: Player, river: any)
+local function join(player: Player, river: any, rawMode: any)
 	local id = player.UserId
 	local time = now()
-	if not isRiver(river) or trips[id] or not inZone(player) then
+	local mode = MatchQueue.parseMode(rawMode)
+	if mode == "arena" then
+		river = Config.ARENA_RIVER -- strefa bitwy nie ma wyboru rzeki: cokolwiek przyszło od klienta, kolejka jest jedna
+	end
+	if type(river) ~= "string" or mode == nil then
+		return
+	end
+	local key = MatchQueue.queueKey(river, mode)
+	if queues[key] == nil or trips[id] or not inZone(player, mode) then
 		return
 	end
 	if time - (joinedAt[id] or -math.huge) < Config.MATCH_JOIN_COOLDOWN then
@@ -521,15 +536,17 @@ local function join(player: Player, river: any)
 	end
 	local current = entries[id]
 	if current then
-		if current.river == river then
+		if current.key == key then
 			return
 		end
-		forget(id) -- zmiana rzeki: nigdy dwie kolejki naraz
+		forget(id) -- zmiana rzeki lub trybu: nigdy dwie kolejki naraz
 	end
 	joinedAt[id] = time
 	entries[id] = {
 		ticket = MatchQueue.ticket(id, game.JobId, time),
 		river = river,
+		mode = mode,
+		key = key,
 		written = false,
 		dirty = true,
 		renewAt = 0,
@@ -538,10 +555,10 @@ local function join(player: Player, river: any)
 	mark(id)
 end
 
-local function onAction(player: Player, action: any, river: any)
+local function onAction(player: Player, action: any, river: any, mode: any)
 	local id = player.UserId
 	if action == "join" then
-		join(player, river)
+		join(player, river, mode)
 	elseif action == "leave" then
 		forget(id)
 	elseif action == "ready" then
@@ -560,13 +577,22 @@ local function onAction(player: Player, action: any, river: any)
 end
 
 local function sendAllTo(player: Player)
-	for river, state in sent do
-		queueState:FireClient(player, river, state.count, state.endsAt, state.ready)
+	for key, state in sent do
+		local queue = queues[key]
+		queueState:FireClient(player, queue.river, state.count, state.endsAt, state.ready, queue.mode)
 	end
 end
 
+local function addQueue(river: string, mode: MatchQueue.Mode)
+	local key = MatchQueue.queueKey(river, mode)
+	queues[key] = { river = river, mode = mode }
+	sent[key] = EMPTY
+end
+
 -- Dostępne rzeki. RiverCatalog czytamy tutaj, a nie na górze pliku: gdyby go zabrakło, reszta wioski ma działać.
+-- Wodna bitwa nie ma rzeki w katalogu, więc jej kolejka powstaje zawsze.
 local function loadRivers()
+	addQueue(Config.ARENA_RIVER, "arena")
 	local Content = Shared:WaitForChild("content")
 	local module = Content:FindFirstChild("RiverCatalog")
 	local ok, catalog = pcall(require, module)
@@ -577,8 +603,9 @@ local function loadRivers()
 	local files = Content:WaitForChild("rivers")
 	for _, entry in catalog do
 		if entry.available and entry.river and files:FindFirstChild(entry.river) then
-			table.insert(rivers, entry.river)
-			sent[entry.river] = EMPTY
+			for _, mode in MatchQueue.MODES do
+				addQueue(entry.river, mode)
+			end
 		end
 	end
 end

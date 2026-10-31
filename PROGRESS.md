@@ -6,9 +6,13 @@ Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejk
 
 Do testu po publikacji (2026-10-31): medale, duchy, przycisk „Wyjdź”, proste sterowanie (tap po prawej = skręt w prawo, sprawdzone w Play) i przełącznik w wiosce. Testy Lune: 167. Następnie „rzeczna wioska”: gracze od razu w kajakach na jeziorze, bez nurtu.
 
-Jeziorna wioska (kajak od startu, jezioro, strefa z boi, samouczek 4 kroki, menu ustawień) działa w Play 2026-10-31, kroki nauki 3–4 nieprzetestowane. Testy Lune: 179.
+Jeziorna wioska (kajak od startu, jezioro, strefa z boi, samouczek 4 kroki, menu ustawień) działa w Play 2026-10-31, kroki nauki 3–4 nieprzetestowane. Testy Lune: 280.
 
-**Przed publiczną premierą:** tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
+Tryb Bitwa: kod gotowy 2026-10-31, w Play solo sprawdzone skrzynki i przyspieszenie; ataki, siatka i tarcza wymagają dwóch graczy.
+
+Wodna bitwa i trzy strefy: kod gotowy 2026-10-31, w Play widać arenę, strzał i strefy; zwężanie, trafienia i koniec rundy wymagają dwóch graczy. Solo w Studio runda kończy się po ok. 40 s.
+
+**Przed publiczną premierą:** sprawdzić tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
 
 **Najpierw:** teleport wioska → spływ na dwóch kontach: komputer przeszedł, a telefon się nie połączył i Marek dostał **kod błędu 2**
 przy teleporcie. Sprawdzić: czy błąd był na telefonie, F9 → Server (linie `[Pier]`) oraz logi telefonu. ADB zawiesiło się przy

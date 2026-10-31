@@ -114,3 +114,45 @@ Spływ: `RaceAction` (klient → serwer: "again" | "village").
 - `QueueState` (serwer → wszyscy): `(river, count, endsAt, ready)`, zastępuje `PierState`.
 - `QueueAction` (klient → serwer): `("join", river)`, `("leave")`, `("ready")`, zastępuje `PierAction`.
 - `TravelNotice` bez zmian.
+
+## Tryb Bitwa (kontrakt z 2026-10-31)
+
+Ta sama rzeka co wyścig, ale po drodze skrzynki z przedmiotami. Bez wpływu na rekordy, medale, duchy i rankingi. Sterowanie to te same pola, przedmiot to jeden duży przycisk.
+
+- **Wybór:** w oknie rzek przełącznik „Wyścig” / „Bitwa”. `QueueAction("join", river, mode)`, `mode` = `"race"` | `"battle"`. Kolejki są osobne: klucz biletów to rzeka i tryb. `QueueState` niesie `(river, count, endsAt, ready, mode)`.
+- **Wpis `Races`:** `{ river, expected, mode }`. Serwer spływu ustawia atrybut `workspace.RaceMode`, brak wpisu = `"race"`. W Studio: `Config.ACTIVE_MODE`.
+- **Skrzynki:** `BattleRules.crates(river)`: co `BATTLE_CRATE_SPACING` studs wzdłuż rzeki, po 3 w poprzek, z dala od skał i wodospadów. Serwer sprawdza zebranie po pozycji `Hull` i odnawia skrzynkę po `BATTLE_CRATE_RESPAWN` s. Klient rysuje je z tych samych danych; `workspace.Crates` nie istnieje, stan zebrania idzie przez `BattleCrate(index, available)`.
+- **Przedmioty:** jeden naraz, losowane przez serwer, tym lepsze, im dalej od prowadzącego:
+  - `boost`: 3 s mocniejszego ciągu,
+  - `shield`: blokuje jeden atak,
+  - `net`: siatka na wodzie za kajakiem, zatrzymuje pierwszego, kto w nią wpłynie,
+  - `splash`: uderzenie wiosłem, najbliższy gracz w zasięgu 14 studs przed lub obok,
+  - `cannon`: armatka wodna, automatycznie w najbliższego gracza w stożku przed dziobem, zasięg 60 studs.
+- **Skutki:** `stun`: 2 s bez wiosłowania, kajak płynie z prądem, potem 4 s ochrony. Kajak zawsze dalej się porusza i nikt nie wypada z wyścigu.
+- **Serwer decyduje:** klient wysyła `BattleUse()`. Serwer sprawdza posiadanie, czas odnowienia i zasięg z pozycji `Hull`, a potem wysyła skutek do ofiary. Fizykę liczy urządzenie gracza.
+- **Zdarzenia `Remotes`:** `BattleUse` (klient → serwer), `BattleItem` (serwer → gracz: id przedmiotu lub nil), `BattleEffect` (serwer → gracz: `"stun"` | `"boost"` | `"shieldHit"`, czas), `BattleCrate` (serwer → wszyscy), `BattleWorld` (serwer → wszyscy: `"net"`, x, z, id, aktywna).
+- **Fizyka:** `KayakPhysics` dostaje `state.stunUntil`, `state.boostUntil` (czas z `os.clock` klienta) i nic poza tym. Bez wpływu w trybie wyścigu.
+- **Liczby:** `Config`, sekcja `-- Bitwa`.
+
+## Strefy na jeziorze i Wodna bitwa (kontrakt z 2026-10-31)
+
+**Trzy strefy w wiosce**, każda z własnym ringiem boi i kolorem. `LakeLayout.zones = { { id, mode, label, color, position, radius } }`:
+
+- `race` (żółta): okno rzek, wyścig,
+- `battle` (czerwona): okno rzek, tryb Bitwa z przedmiotami,
+- `arena` (niebieska): bez wyboru rzeki, od razu kolejka Wodnej bitwy.
+
+Przełącznik Wyścig/Bitwa w `RiverPicker` znika: o trybie decyduje strefa. W `workspace.Piers` są Part `QueueZone` z atrybutem `Mode`. `MatchService` przyjmuje `join` tylko dla trybu strefy, w której gracz stoi.
+
+**Wodna bitwa** to tryb `arena` w miejscu Spływ:
+
+- Kolejka: `mode = "arena"`, `river = "Arena"`, klucz biletów `Arena_arena`. Start przy co najmniej 2 graczach, do 8. Solo czeka, a panel pokazuje „Potrzeba 2 graczy”.
+- Świat: `content/ArenaLayout.luau` z polami jak `LakeLayout`: `center`, `radius`, `spawnRing`, `obstacles` (wyspy i skały jako koła). Serwer buduje okrągłe jezioro zamiast rzeki, klient używa `Lake`. `workspace.RaceMode = "arena"`, `RiverId = "Arena"`.
+- Zasady: każdy ma 100 wytrzymałości. Przycisk strzela armatką: automatycznie w najbliższego gracza w stożku przed dziobem, zasięg 70 studs, 15 obrażeń, odnowienie 1 s. Serwer sprawdza wszystko z pozycji `Hull`.
+- Kurcząca się strefa: pierścień zwęża się od `radius` do 40 studs przez 120 s; poza nim 5 obrażeń na sekundę.
+- Koniec: zostaje jeden gracz albo mija 180 s (wygrywa ten z największą wytrzymałością). Odpadnięty zostaje na wodzie bez strzelania i ogląda do końca rundy. Potem `results` i automatyczna kolejna runda.
+- Bez wpływu na rekordy, medale i rankingi. Wyniki: miejsca wg kolejności odpadania.
+
+**Zdarzenia `Remotes`:** `ArenaFire` (klient → serwer), `ArenaState` (serwer → wszyscy: faza, koniec fazy, promień strefy, liczba żywych), `ArenaHealth` (serwer → gracz: wytrzymałość), `ArenaHit` (serwer → wszyscy: strzelający, cel lub nil), `ArenaOut` (serwer → wszyscy: userId, nazwa, miejsce), `ArenaResults` (serwer → wszyscy: lista).
+
+**Liczby:** `Config`, sekcja `-- Wodna bitwa`.

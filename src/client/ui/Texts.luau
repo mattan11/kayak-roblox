@@ -45,6 +45,41 @@ return {
 	toVillage = "Do wioski",
 	toVillageWaiting = "Płyniemy…",
 
+	-- Tryb Bitwa. Ikony to zwykłe znaki, bez wgrywanych obrazków. Klucze items = BattleRules.ITEMS.
+	battle = {
+		stunned = "Ogłuszony!",
+		boost = "Przyspieszenie!",
+		shieldHit = "Tarcza zatrzymała atak!",
+		noTarget = "Nikogo w zasięgu",
+		crateMark = "?",
+		stars = "★ ★ ★",
+		items = {
+			boost = { icon = "⚡", name = "Przyspieszenie" },
+			shield = { icon = "🛡", name = "Tarcza" },
+			net = { icon = "🕸", name = "Siatka" },
+			splash = { icon = "💦", name = "Wiosło" },
+			cannon = { icon = "🌊", name = "Armatka" },
+		},
+	},
+
+	-- Wodna bitwa. Ikona to zwykły znak, bez wgrywanych obrazków.
+	arena = {
+		fire = "STRZAŁ",
+		fireIcon = "🌊",
+		health = "Wytrzymałość %d",
+		alive = "Na wodzie: %d",
+		noTarget = "Nikogo w zasięgu",
+		zoneWarning = "Wracaj do strefy!",
+		outSelf = "Odpadasz! Miejsce %d",
+		outOther = "%s odpada",
+		watching = "Oglądasz do końca rundy",
+		winner = "Wygrywa %s!",
+		winnerSelf = "Wygrywasz!",
+		nextRound = "Dołączysz w następnej rundzie",
+		resultsTitle = "Wyniki bitwy",
+		ownPlace = "Twoje miejsce: %d",
+	},
+
 	-- TravelNotice: serwer wysyła klucz, nie gotowe zdanie (dla TS: jak kod błędu mapowany na komunikat).
 	-- Nieznany klucz = travelDefault, żeby gracz nigdy nie zobaczył surowej nazwy.
 	travelDefault = "Nie udało się wrócić do wioski. Spróbuj jeszcze raz.",

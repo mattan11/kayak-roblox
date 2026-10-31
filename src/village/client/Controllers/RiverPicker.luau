@@ -1,9 +1,12 @@
--- Wybór rzeki w wiosce: przycisk „Wybierz rzekę” w strefie startu na jeziorze, okno z kafelkami 7 rzek i panel kolejki.
--- Stan to kilka zmiennych (inZone, pickerOpen, joined, voted), a `render()` wylicza z nich widoczność, jak czysty render
--- w React. Serwer rozgłasza stan KAŻDEJ rzeki (QueueState), a klient wybiera tę, do której dołączył
+-- Kolejka w wiosce: przycisk u góry w strefie na jeziorze, okno z kafelkami 7 rzek i panel kolejki.
+-- Stan to kilka zmiennych (zoneMode, pickerOpen, joined, voted), a `render()` wylicza z nich widoczność, jak czysty render
+-- w React. Serwer rozgłasza stan KAŻDEJ kolejki (QueueState), a klient wybiera tę, do której dołączył
 -- (dla TS: globalny store z websocketa + selektor po `joined`).
 -- Układ w pikselach dla wysokości telefonu, UIScale dopasowuje go do ekranu, jak w HudController.
 -- Cały ekran to pola wiosła, a kciuki leżą przy dolnych rogach, więc przycisk stoi u góry na środku, a panel między rogami.
+-- O trybie decyduje strefa, w której jest kajak (atrybut Mode na QueueZone): `zoneMode` to tryb strefy, `joinedMode` tryb kolejki gracza.
+-- race i battle otwierają okno rzek, arena od razu ustawia w kolejce, bo Wodna bitwa ma jedną stałą „rzekę” (ARENA_ENTRY).
+-- Kolejki są osobne dla rzeki i trybu, więc queues ma klucz złożony z obu (dla TS: Map z kluczem "rzeka|tryb").
 -- Tylko przyciski i okno są Active: tam dotyk nie trafia do wiosła (`processed` w PaddleInput), reszta przechodzi na wodę.
 
 local Players = game:GetService("Players")
@@ -44,10 +47,15 @@ local HEADER_HEIGHT = 44
 local WINDOW_MARGIN = 10
 local SCROLLBAR = 6
 local WINDOW_SCREEN_GAP = 16 -- najmniejszy odstęp okna od krawędzi ekranu (w pikselach projektu)
+local ARENA_MODE = "arena"
+local ARENA_MIN_PLAYERS = 2 -- kontrakt Wodnej bitwy; serwer i tak sam pilnuje startu, tu chodzi tylko o napis
 
 type Queue = { count: number, endsAt: number?, ready: number }
 type Entry = { id: string, river: string?, label: string, difficulty: string, available: boolean }
-type Tile = { thumb: Frame, color: Color3, data: any }
+type Tile = { thumb: Frame, color: Color3, data: any, medals: { TextLabel }, noMedals: TextLabel }
+
+-- Wodna bitwa nie ma pozycji w katalogu rzek, a kolejka działa tak samo: stały wpis zamiast kafelka.
+local ARENA_ENTRY: Entry = { id = "Arena", river = "Arena", label = Texts.modes.arena, difficulty = "", available = true }
 
 local player = Players.LocalPlayer
 
@@ -72,9 +80,10 @@ local queues: { [string]: Queue } = {} -- ostatni QueueState każdej rzeki
 local tiles: { Tile } = {}
 local thumbnailsDrawn = false
 
-local inZone = false -- kajak jest w QueueZone (po pozycji)
+local zoneMode: string? = nil -- tryb strefy, w której jest kajak (po pozycji); nil = poza strefami
 local pickerOpen = false
 local joined: Entry? = nil -- rzeka, do której gracz dołączył
+local joinedMode = "race" -- tryb kolejki, w której gracz stoi
 local voted = false -- ten gracz kliknął już „Płyń teraz”
 local joinedAt = 0 -- kiedy kliknął rzekę; do tej chwili + QUEUE_CONFIRM_TIME czekamy na potwierdzenie serwera
 local traveling = false -- teleport w toku
@@ -135,20 +144,34 @@ local function updateScale()
 	end
 end
 
+local function queueKey(river: string, queueMode: string): string
+	return river .. "|" .. queueMode
+end
+
 -- Jedno miejsce, które decyduje, co widać. Wołane po każdej zmianie stanu i przy odświeżaniu.
 local function render()
+	local inZone = zoneMode ~= nil
+	local isArena = zoneMode == ARENA_MODE
 	local showPanel = inZone and joined ~= nil and not traveling
 	local showPicker = inZone and pickerOpen and joined == nil
-	openButton.Visible = inZone and joined == nil and not pickerOpen and #entries > 0
+	openButton.Visible = inZone and joined == nil and not pickerOpen and (isArena or #entries > 0)
+	openButton.Text = if isArena then Texts.arenaGo else Texts.pickerOpen
 	backdrop.Visible = showPicker
 	panel.Visible = showPanel
 
 	local entry = joined
 	if showPanel and entry then
-		titleLabel.Text = string.format(Texts.queueTitle, entry.label, entry.difficulty)
-		local queue = queues[entry.river or entry.id]
+		local inArena = joinedMode == ARENA_MODE
+		titleLabel.Text = if inArena
+			then Texts.modes.arena
+			else string.format(Texts.queueTitle, entry.label, entry.difficulty, Texts.modes[joinedMode])
+		local queue = queues[queueKey(entry.river or entry.id, joinedMode)]
+		local waitingAlone = inArena and (queue == nil or queue.count < ARENA_MIN_PLAYERS)
+		goButton.Visible = not waitingAlone -- sam nie wystartuje, więc „Płyń teraz” nic by nie dało
 		if queue == nil or queue.count <= 0 then
 			statusLabel.Text = Texts.queueJoining -- nasz bilet jeszcze nie dotarł do lidera albo grupa właśnie startuje
+		elseif waitingAlone then
+			statusLabel.Text = string.format(Texts.queueNeedPlayers, ARENA_MIN_PLAYERS)
 		else
 			local status
 			if queue.endsAt then
@@ -176,12 +199,25 @@ local function leaveQueue()
 end
 
 local function joinQueue(entry: Entry)
-	if inZone and joined == nil then
+	local mode = zoneMode
+	if mode and joined == nil then
 		joined = entry
+		joinedMode = mode
 		joinedAt = os.clock()
 		pickerOpen = false
-		Remotes.get("QueueAction"):FireServer("join", entry.river or entry.id)
+		Remotes.get("QueueAction"):FireServer("join", entry.river or entry.id, mode)
 		render()
+	end
+end
+
+-- Medale są tylko w wyścigu, więc w Bitwie kafelek mówi to wprost zamiast pokazywać progi.
+local function showTilesForZone()
+	local battle = zoneMode == "battle"
+	for _, tile in tiles do
+		for _, medal in tile.medals do
+			medal.Visible = not battle
+		end
+		tile.noMedals.Visible = battle and tile.data ~= nil
 	end
 end
 
@@ -236,14 +272,15 @@ end
 
 -- Progi medali w trzech równych kolumnach, od brązu do złota. Tylko czasy z Config: wioska nie ma ProfileStore,
 -- więc nie zna medali gracza.
-local function buildMedalTimes(entry: Entry, tile: Instance, top: number)
+local function buildMedalTimes(entry: Entry, tile: Instance, top: number): { TextLabel }
+	local labels: { TextLabel } = {}
 	local times = Config.RIVER_MEDALS[entry.river or entry.id]
 	if times == nil then
-		return
+		return labels
 	end
 	local width = (Config.PICKER_TILE_WIDTH - 18) // #Medals.RANKS
 	for rank, key in Medals.RANKS do
-		label({
+		labels[rank] = label({
 			Position = UDim2.fromOffset(9 + (rank - 1) * width, top),
 			Size = UDim2.fromOffset(width, 16),
 			Font = FONT,
@@ -252,6 +289,7 @@ local function buildMedalTimes(entry: Entry, tile: Instance, top: number)
 			Text = string.format(Texts.pickerMedalTime, Medals.clock(times[key])),
 		}, tile)
 	end
+	return labels
 end
 
 local function buildTile(entry: Entry, order: number)
@@ -288,7 +326,16 @@ local function buildTile(entry: Entry, order: number)
 		Text = entry.difficulty,
 	}, tile)
 
-	buildMedalTimes(entry, tile, textTop + 36)
+	local medals = buildMedalTimes(entry, tile, textTop + 36)
+	local noMedals = label({
+		Position = UDim2.fromOffset(9, textTop + 36),
+		Size = UDim2.new(1, -18, 0, 16),
+		Font = FONT,
+		TextSize = 13,
+		TextColor3 = COLORS.dim,
+		Text = Texts.pickerNoMedals,
+		Visible = false,
+	}, tile)
 
 	if available then
 		tile.Text = ""
@@ -318,6 +365,8 @@ local function buildTile(entry: Entry, order: number)
 		thumb = thumb,
 		color = DIFFICULTY_COLORS[entry.difficulty] or COLORS.fill,
 		data = riverData[entry.id],
+		medals = medals,
+		noMedals = noMedals,
 	})
 end
 
@@ -338,6 +387,10 @@ local function buildOpenButton()
 	corner(openButton, 14)
 	openScale = make("UIScale", {}, openButton)
 	openButton.Activated:Connect(function()
+		if zoneMode == ARENA_MODE then
+			joinQueue(ARENA_ENTRY)
+			return
+		end
 		pickerOpen = true
 		drawThumbnails()
 		render()
@@ -423,6 +476,7 @@ local function buildPicker()
 	for order, entry in entries do
 		buildTile(entry, order)
 	end
+	showTilesForZone()
 end
 
 local function actionButton(text: string, anchorX: number, color: Color3, onClick: () -> ()): TextButton
@@ -518,22 +572,22 @@ local function showNotice(key: any)
 	render()
 end
 
--- Czy kajak jest w strefie: pozycja w układzie strefy kontra pół rozmiaru.
-local function isInZone(position: Vector3): boolean
+-- Tryb strefy, w której jest kajak: pozycja w układzie strefy kontra pół rozmiaru. nil = poza strefami.
+local function modeAt(position: Vector3): string?
 	local folder = workspace:FindFirstChild("Piers")
 	if folder == nil then
-		return false
+		return nil
 	end
 	for _, zone in folder:GetChildren() do
 		if zone:IsA("BasePart") and zone.Name == "QueueZone" then
 			local inside = zone.CFrame:PointToObjectSpace(position)
 			local half = zone.Size / 2
 			if math.abs(inside.X) <= half.X and math.abs(inside.Y) <= half.Y and math.abs(inside.Z) <= half.Z then
-				return true
+				return zone:GetAttribute("Mode")
 			end
 		end
 	end
-	return false
+	return nil
 end
 
 -- Najpierw kajak; postać zostaje na czas, gdy kajaka jeszcze nie ma (dołączanie, odrodzenie).
@@ -552,8 +606,14 @@ end
 -- Prawdę o kolejce trzyma serwer w atrybutach gracza: mógł odrzucić „join” albo sam zdjąć gracza z kolejki.
 local function syncWithServer()
 	local river = player:GetAttribute("QueueRiver")
+	local queueMode = player:GetAttribute("QueueMode") -- brak = zostaje tryb z chwili dołączenia
+	if type(queueMode) == "string" then
+		joinedMode = queueMode
+	end
 	traveling = player:GetAttribute("QueueTraveling") == true
-	if river then
+	if river == ARENA_ENTRY.river then
+		joined = ARENA_ENTRY
+	elseif river then
 		for _, entry in entries do
 			if (entry.river or entry.id) == river then
 				joined = entry
@@ -569,10 +629,16 @@ end
 local function refresh()
 	syncWithServer()
 	local position = ownPosition()
-	inZone = position ~= nil and isInZone(position)
-	if not inZone then
-		pickerOpen = false
-		leaveQueue()
+	local previousMode = zoneMode
+	zoneMode = if position then modeAt(position) else nil
+	if zoneMode ~= previousMode then
+		showTilesForZone()
+	end
+	if zoneMode == nil or zoneMode == ARENA_MODE then
+		pickerOpen = false -- arena nie ma okna rzek
+	end
+	if zoneMode ~= joinedMode then
+		leaveQueue() -- wypłynięcie ze strefy zdejmuje z kolejki; leaveQueue nic nie robi, gdy gracz w niej nie stoi
 	end
 	render()
 
@@ -638,8 +704,8 @@ function RiverPicker.start()
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
 	end
 
-	Remotes.get("QueueState").OnClientEvent:Connect(function(river: string, count: number, endsAt: number?, ready: number?)
-		queues[river] = { count = count, endsAt = endsAt, ready = ready or 0 }
+	Remotes.get("QueueState").OnClientEvent:Connect(function(river: string, count: number, endsAt: number?, ready: number?, queueMode: string?)
+		queues[queueKey(river, queueMode or "race")] = { count = count, endsAt = endsAt, ready = ready or 0 }
 	end)
 	Remotes.get("TravelNotice").OnClientEvent:Connect(showNotice)
 

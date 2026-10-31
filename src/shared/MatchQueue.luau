@@ -4,6 +4,8 @@
 -- (Dla TS: jak reducer plus zody do parsowania: dane wchodzą, decyzja wychodzi, efekty uboczne robi ktoś inny.)
 --
 -- Start rzeki: komplet biletów, albo najstarszy czeka PIER_COUNTDOWN, albo wszyscy `ready`.
+-- Każda para rzeka + tryb to osobna kolejka (`queueKey`). Dla wyścigu klucz to sama rzeka, więc nazwy map się nie zmieniły.
+-- Tryb „arena” ma jedną kolejkę (`Arena_arena`) i minimum graczy: poniżej niego nic nie startuje ani nie odlicza.
 
 local Config = require(script.Parent.Config)
 
@@ -12,8 +14,31 @@ local MatchQueue = {}
 export type Ticket = { userId: number, serverId: string, joinedAt: number, ready: boolean }
 export type State = { count: number, endsAt: number?, ready: number }
 export type Decision = { group: { Ticket }?, rest: { Ticket }, state: State }
-export type Match = { river: string, userIds: { number }, code: string?, at: number }
+export type Mode = "race" | "battle" | "arena"
+export type Match = { river: string, mode: Mode, userIds: { number }, code: string?, at: number }
 export type Health = { failures: number, down: boolean }
+
+-- Tryby wybierane na rzece: po jednej kolejce na każdą. „arena” tu nie ma, bo nie ma rzeki: to jedna kolejka, którą dodaje MatchService.
+MatchQueue.MODES = { "race", "battle" } :: { Mode }
+
+-- Tryb z sieci albo z wpisu. Brak = "race": tak wysyła starszy klient i starszy serwer w trakcie aktualizacji gry.
+-- Nieznana wartość = nil, czyli odrzucenie. (Dla TS: `z.enum([...]).default("race").safeParse`.)
+function MatchQueue.parseMode(value: any): Mode?
+	if value == nil or value == "race" then
+		return "race"
+	end
+	return if value == "battle" or value == "arena" then value else nil
+end
+
+-- Ile biletów trzeba, żeby kolejka w ogóle mogła ruszyć.
+function MatchQueue.minPlayers(mode: Mode): number
+	return if mode == "arena" then Config.ARENA_MIN_PLAYERS else 1
+end
+
+-- Klucz kolejki: nazwa mapy biletów i klucz w QueueState.
+function MatchQueue.queueKey(river: string, mode: Mode): string
+	return if mode == "race" then river else river .. "_" .. mode
+end
 
 function MatchQueue.ticket(userId: number, serverId: string, now: number): Ticket
 	return { userId = userId, serverId = serverId, joinedAt = now, ready = false }
@@ -39,39 +64,44 @@ local function older(a: Ticket, b: Ticket): boolean
 end
 
 -- Stan do pokazania graczom. Kolejka ponad komplet też się liczy: nadmiarowi wypłyną następną grupą.
-function MatchQueue.state(tickets: { Ticket }): State
-	local oldest: number? = nil
+-- Odliczanie rusza od biletu numer `minPlayers` (domyślnie najstarszego): kto czekał sam, nie zabiera drugiemu jego 30 s,
+-- a `endsAt = nil` przy zbyt małej kolejce mówi panelowi, że brakuje graczy.
+function MatchQueue.state(tickets: { Ticket }, minPlayers: number?): State
+	local times: { number } = {}
 	local ready = 0
 	for _, ticket in tickets do
-		oldest = if oldest == nil then ticket.joinedAt else math.min(oldest, ticket.joinedAt)
+		table.insert(times, ticket.joinedAt)
 		if ticket.ready then
 			ready += 1
 		end
 	end
-	return { count = #tickets, endsAt = if oldest then oldest + Config.PIER_COUNTDOWN else nil, ready = ready }
+	table.sort(times)
+	local from = times[minPlayers or 1]
+	return { count = #tickets, endsAt = if from then from + Config.PIER_COUNTDOWN else nil, ready = ready }
 end
 
 -- Które bilety startują. Grupa to najstarsze bilety, najwyżej komplet; reszta czeka i dostaje swój stan.
-function MatchQueue.decide(tickets: { Ticket }, now: number): Decision
+-- Mniej niż `minPlayers` biletów nie startuje nigdy, nawet gdy wszyscy są `ready`.
+function MatchQueue.decide(tickets: { Ticket }, now: number, minPlayers: number?): Decision
 	local sorted = table.clone(tickets)
 	table.sort(sorted, older)
-	local state = MatchQueue.state(sorted)
+	local state = MatchQueue.state(sorted, minPlayers)
 	local count = #sorted
 	local capacity = Config.PIER_CAPACITY
 	local go = count >= capacity
-		or (count > 0 and (now >= (state.endsAt :: number) or state.ready == count))
+		or (count >= (minPlayers or 1) and (now >= (state.endsAt :: number) or state.ready == count))
 	if not go then
 		return { group = nil, rest = sorted, state = state }
 	end
 	local group = table.move(sorted, 1, math.min(count, capacity), 1, {})
 	local rest = table.move(sorted, #group + 1, count, 1, {})
-	return { group = group, rest = rest, state = MatchQueue.state(rest) }
+	return { group = group, rest = rest, state = MatchQueue.state(rest, minPlayers) }
 end
 
--- Gracz może stać w jednej kolejce. Gdy zmienił rzekę, a usunięcie starego biletu nie doszło do skutku, liczy się nowszy bilet.
-function MatchQueue.dedupe(byRiver: { [string]: { Ticket } }): { [string]: { Ticket } }
+-- Gracz może stać w jednej kolejce. Gdy zmienił rzekę albo tryb, a usunięcie starego biletu nie doszło do skutku, liczy się nowszy bilet.
+function MatchQueue.dedupe(byQueue: { [string]: { Ticket } }): { [string]: { Ticket } }
 	local newest: { [number]: Ticket } = {}
-	for _, tickets in byRiver do
+	for _, tickets in byQueue do
 		for _, ticket in tickets do
 			local seen = newest[ticket.userId]
 			if seen == nil or ticket.joinedAt > seen.joinedAt then
@@ -80,14 +110,14 @@ function MatchQueue.dedupe(byRiver: { [string]: { Ticket } }): { [string]: { Tic
 		end
 	end
 	local result: { [string]: { Ticket } } = {}
-	for river, tickets in byRiver do
+	for queue, tickets in byQueue do
 		local kept: { Ticket } = {}
 		for _, ticket in tickets do
 			if newest[ticket.userId] == ticket then
 				table.insert(kept, ticket)
 			end
 		end
-		result[river] = kept
+		result[queue] = kept
 	end
 	return result
 end
@@ -113,15 +143,19 @@ function MatchQueue.parseMatch(data: any): Match?
 	if #data.userIds == 0 or #data.userIds > Config.PIER_CAPACITY then
 		return nil
 	end
+	local mode = MatchQueue.parseMode(data.mode)
+	if mode == nil then
+		return nil
+	end
 	for _, id in data.userIds do
 		if type(id) ~= "number" then
 			return nil
 		end
 	end
-	return { river = data.river, userIds = data.userIds, code = data.code, at = data.at }
+	return { river = data.river, mode = mode, userIds = data.userIds, code = data.code, at = data.at }
 end
 
--- Stan z tematu QueueState: wysyłamy tylko niepuste rzeki, bo limit wiadomości to 1 kB. Brak rzeki = pusta kolejka.
+-- Stan z tematu QueueState, kluczem jest queueKey: wysyłamy tylko niepuste kolejki, bo limit wiadomości to 1 kB. Brak klucza = pusta kolejka.
 function MatchQueue.encodeState(states: { [string]: State }): { [string]: State }
 	local result: { [string]: State } = {}
 	for river, state in states do

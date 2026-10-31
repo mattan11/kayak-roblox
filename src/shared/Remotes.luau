@@ -28,6 +28,17 @@ local DEFINITIONS: { [string]: Kind } = {
 	MedalAwarded = "reliable", -- serwer → gracz: (riverId, stopień 1..3) po przyjęciu czasu
 	GhostData = "reliable", -- serwer → gracz: (lista duchów) przed startem wyścigu
 	SettingAction = "reliable", -- klient → serwer: (nazwa ustawienia, bool), PlayerSettings
+	BattleUse = "reliable", -- klient → serwer: użycie przedmiotu
+	BattleItem = "reliable", -- serwer → gracz: id przedmiotu lub nil
+	BattleEffect = "reliable", -- serwer → gracz: (rodzaj, czas)
+	BattleCrate = "reliable", -- serwer → wszyscy: (numer skrzynki, dostępna)
+	BattleWorld = "reliable", -- serwer → wszyscy: ("net", x, z, id, aktywna)
+	ArenaFire = "reliable", -- klient → serwer: strzał
+	ArenaState = "reliable", -- serwer → wszyscy: (faza, koniec fazy, promień strefy, żywi)
+	ArenaHealth = "reliable", -- serwer → gracz: wytrzymałość
+	ArenaHit = "reliable", -- serwer → wszyscy: (strzelający, cel lub nil)
+	ArenaOut = "reliable", -- serwer → wszyscy: (userId, nazwa, miejsce)
+	ArenaResults = "reliable", -- serwer → wszyscy: lista wyników
 	PersonalBest = "reliable", -- serwer → gracz: (bestTime | nil, isNewRecord)
 }
 

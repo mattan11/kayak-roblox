@@ -8,7 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Places = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Places"))
 
-local RACE_ONLY = { HudController = true, LeaveButton = true, GhostController = true }
+local RACE_ONLY = { HudController = true, LeaveButton = true, GhostController = true, BattleController = true, ArenaController = true }
 local inRace = Places.current().id == "race"
 
 local controllers: { [string]: any } = {}

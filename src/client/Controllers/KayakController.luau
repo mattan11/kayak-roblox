@@ -154,7 +154,8 @@ local function frame(dt: number)
 	updateClock(state, finished)
 
 	if Session.active then
-		updateBrace(state, PaddleInput.currentBrace())
+		-- Ogłuszony nie wbija wiosła: bez tego animacja i rozbryzg szłyby mimo braku działania
+		updateBrace(state, if os.clock() < state.stunUntil then nil else PaddleInput.currentBrace())
 		PaddleInput.feedHeldStrokes(state)
 		collectOthers()
 		local started = KayakPhysics.step(state, Session.river, others, dt)
@@ -210,10 +211,24 @@ local function onRaceState(phase: string, endsAt: number)
 	end
 end
 
+-- Wodna bitwa: ArenaState zastępuje RaceState. Jedyny słuchacz tego zdarzenia: Roblox oddaje zdarzenia z kolejki tylko
+-- pierwszemu połączeniu, więc ArenaController czyta stan z Session i zdarzenia "arenaState".
+local function onArenaState(phase: any, endsAt: any, radius: any, alive: any)
+	Session.arenaRadius, Session.arenaAlive = radius, alive
+	if type(phase) == "string" and type(endsAt) == "number" then
+		onRaceState(phase, endsAt)
+	end
+	Session.emit("arenaState")
+end
+
 function KayakController.start()
 	paddleRemote = Remotes.get("Paddle")
 	Remotes.get("Reset").OnClientEvent:Connect(onReset)
-	Remotes.get("RaceState").OnClientEvent:Connect(onRaceState)
+	if Session.arena then
+		Remotes.get("ArenaState").OnClientEvent:Connect(onArenaState)
+	else
+		Remotes.get("RaceState").OnClientEvent:Connect(onRaceState)
+	end
 
 	RunService:BindToRenderStep("KayakPhysics", Enum.RenderPriority.Input.Value + 1, frame)
 

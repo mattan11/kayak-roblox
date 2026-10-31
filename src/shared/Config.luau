@@ -2,6 +2,7 @@
 
 local Config = {
 	ACTIVE_RIVER = "Mountain", -- która rzeka z content/rivers się wczytuje (wybór mapy przyjdzie z wioską)
+	ACTIVE_MODE = "race", -- tryb w Studio: "race", "battle" albo "arena"; poza Studio decyduje wpis z wioski, a jego brak to "race"
 
 	-- Wiosłowanie
 	STROKE_TIME = 0.85, -- długość jednego machnięcia (stała, niezależnie od tempa tapania)
@@ -272,6 +273,64 @@ local Config = {
 	RACE_TICKET_WAIT = 1,
 	RACE_GATHER_TIME = 15, -- najdłuższe czekanie na grupę przed pierwszym odliczaniem
 	AGAIN_COUNTDOWN = 3, -- odliczanie, gdy wszyscy kliknęli „Jeszcze raz”
+
+	-- Bitwa
+	BATTLE_TICK = 0.1, -- co ile s serwer sprawdza skrzynki i siatki (jak RACE_SAMPLE_INTERVAL)
+	BATTLE_CRATE_SPACING = 120, -- co tyle studs wzdłuż rzeki rząd skrzynek
+	BATTLE_CRATE_START = 60, -- pierwszy rząd tyle za linią startu
+	BATTLE_CRATE_FINISH_CLEAR = 40, -- ostatni rząd najbliżej tyle przed metą
+	BATTLE_CRATE_LANE = 0.55, -- boczne skrzynki: ułamek halfWidth od środka (środkowa leży na osi)
+	BATTLE_CRATE_RADIUS = 5, -- zebranie: odległość środka kajaka od skrzynki (przy 55 studs/s to 2 odczyty na przejazd)
+	BATTLE_CRATE_RESPAWN = 8, -- skrzynka wraca po tylu s
+	BATTLE_CRATE_ROCK_CLEAR = 6, -- najmniejszy odstęp skrzynki od krawędzi skały
+	BATTLE_CRATE_FALL_CLEAR = 35, -- bez skrzynek tyle studs przed i za wodospadem
+	BATTLE_USE_COOLDOWN = 1, -- najmniejszy odstęp między użyciami przedmiotów
+	BATTLE_BOOST_TIME = 3,
+	BATTLE_MAX_SPEED = 75, -- limit anty-oszustwo w Bitwie: boost daje więcej niż wyścig
+	BATTLE_BOOST_THRUST = 1.6, -- mnożnik ciągu wiosłowania w czasie boostu (klient, KayakPhysics)
+	BATTLE_STUN_TIME = 2, -- bez wiosłowania, kajak płynie z prądem
+	BATTLE_PROTECT_TIME = 4, -- ochrona po końcu ogłuszenia
+	BATTLE_SPLASH_RANGE = 14,
+	BATTLE_SPLASH_ARC_COS = -0.2, -- wiosło sięga przed dziób i na boki, ale nie za plecy (cos kąta od dziobu)
+	BATTLE_CANNON_RANGE = 60,
+	BATTLE_CANNON_ARC_COS = 0.7, -- stożek przed dziobem: około 45° w każdą stronę
+	BATTLE_BEND_SLACK = 1.5, -- cel najdalej zasięg × tyle wzdłuż rzeki: nie strzelamy przez brzeg do sąsiedniego zakola
+	BATTLE_NET_BEHIND = 9, -- siatka powstaje tyle za środkiem kajaka
+	BATTLE_NET_RADIUS = 5, -- kto wpłynie tak blisko, wpadł w siatkę
+	BATTLE_NET_LIFETIME = 20, -- nietrafiona siatka znika po tylu s
+	-- Wagi losowania: front = prowadzący, back = ostatni; miejsca pomiędzy mają wagi pośrednie. Kolejność i lista: BattleRules.ITEMS.
+	BATTLE_ITEM_WEIGHTS = {
+		boost = { front = 2, back = 4 },
+		shield = { front = 4, back = 2 },
+		net = { front = 4, back = 1 },
+		splash = { front = 2, back = 3 },
+		cannon = { front = 0, back = 5 },
+	},
+
+	-- Wodna bitwa
+	ARENA_RIVER = "Arena", -- wartość `river` w kolejce i workspace.RiverId; to nie plik z content/rivers, tylko content/ArenaLayout
+	ARENA_MIN_PLAYERS = 2, -- poniżej tego runda nie rusza, a kolejka czeka bez końca (odliczanie od drugiego biletu)
+	ARENA_RADIUS = 180, -- promień jeziora i początkowy promień strefy
+	ARENA_SPAWN_RING = 150, -- okrąg miejsc startowych
+	ARENA_HEALTH = 100,
+	ARENA_CANNON_RANGE = 70,
+	ARENA_CANNON_DAMAGE = 15,
+	ARENA_COOLDOWN = 1, -- odstęp strzałów, pilnowany czasem serwera
+	ARENA_CANNON_ARC_COS = 0.7, -- stożek przed dziobem: około 45° w każdą stronę
+	ARENA_ZONE_END_RADIUS = 40,
+	ARENA_ZONE_TIME = 120, -- po tylu s strefa ma końcowy promień
+	ARENA_ZONE_DPS = 5, -- obrażenia na sekundę poza strefą
+	ARENA_ROUND_TIME = 180, -- limit rundy; potem wygrywa największa wytrzymałość
+	ARENA_ALONE_TIME = 15, -- samotny gracz na serwerze zarezerwowanym wraca do wioski po tylu s
+	ARENA_TICK = 0.1, -- co ile s serwer liczy strefę i fazy (jak RACE_SAMPLE_INTERVAL)
+	ARENA_BURN_MAX_STEP = 1, -- najdłuższy odcinek czasu liczony naraz: przycięcie serwera nie zabija jednym obiegiem
+	ARENA_STATE_INTERVAL = 1, -- co ile s ArenaState odświeża promień strefy
+	ARENA_FIRE_RATE = 3, -- limit zapytań ArenaFire na sekundę; klient przy trzymaniu strzela co ARENA_COOLDOWN + 0,05 s, więc go nie dotyka
+	ARENA_FIRE_BURST = 5,
+	ARENA_TREES = 40, -- drzewa na brzegu
+	ARENA_WALL_SEGMENTS = 40, -- panele ściany strefy
+	ARENA_WALL_HEIGHT = 16,
+	ARENA_WALL_STEP = 0.5, -- ściana przesuwa się co tyle studs: każdy ruch to replikacja wszystkich paneli
 }
 
 return Config
