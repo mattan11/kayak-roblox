@@ -4,10 +4,14 @@
 -- Nic poza przyciskami nie jest Active, więc dotyk przechodzi przez HUD do sterowania.
 --
 -- W Wodnej bitwie (Session.arena) nie ma zegara, paska trasy, rekordu, medalu ani top 10: stan walki rysuje ArenaController,
--- a tu zostają odliczanie i ekran wyników z miejscami z ArenaResults.
+-- a tu zostają odliczanie i ekran wyników z miejscami z ArenaResults. Zwycięzca jest w tytule panelu.
+--
+-- Pasek menu Robloxa leży nad naszym GUI (IgnoreGuiInset = true), więc panel wyników stoi w bezpiecznym obszarze pod nim
+-- i w razie potrzeby sam się zmniejsza (updateScale). To działa tak samo w wyścigu, Bitwie i Wodnej bitwie.
 --
 -- Ranking: ReplicatedStorage.TopTimes (StringValue z JSON-em, Leaderboard na serwerze). Brak = bez kolumny top 10.
 
+local GuiService = game:GetService("GuiService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -38,6 +42,7 @@ local COLORS = {
 local FONT = Enum.Font.GothamMedium
 local FONT_BOLD = Enum.Font.GothamBold
 local MAX_ROWS = 10
+local PANEL_HEIGHT = 356
 local RESULT_ROWS = Config.PIER_CAPACITY -- lewa kolumna: pod wierszami graczy stoją dwie linie medalu
 local MAX_DOTS = 12
 local POP = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -63,6 +68,7 @@ local fill: Frame = nil
 local ownDot: Frame = nil
 local dots: { Frame } = {}
 local panel: Frame = nil
+local panelScale: UIScale = nil
 local panelTitle: TextLabel = nil
 local resultRows: { TextLabel } = {}
 local medalLabel: TextLabel = nil
@@ -130,10 +136,18 @@ end
 local function updateScale()
 	local camera = workspace.CurrentCamera
 	if camera then
-		local scale = math.min(camera.ViewportSize.Y / Config.HUD_DESIGN_HEIGHT, Config.HUD_SCALE_MAX)
+		local height = camera.ViewportSize.Y
+		local scale = math.min(height / Config.HUD_DESIGN_HEIGHT, Config.HUD_SCALE_MAX)
 		for _, item in scales do
 			item.Scale = scale
 		end
+		-- Bezpieczny obszar to ekran bez paska menu (dla TS: env(safe-area-inset-top)). Panel jest wysoki, więc na telefonie
+		-- zmniejszamy go do tego obszaru, a nie do całej wysokości ekranu, i centrujemy w nim.
+		local top = math.max(GuiService:GetGuiInset().Y, Config.UI_TOP_SAFE)
+		local room = height - top - Config.UI_PANEL_MARGIN
+		panelScale.Scale = math.min(scale, room / PANEL_HEIGHT)
+		panel.Position = UDim2.new(0.5, 0, 0, top + room / 2)
+		noticeGroup.Position = UDim2.new(0.5, 0, 0, top)
 	end
 end
 
@@ -314,7 +328,8 @@ local function buildActions(parent: Frame)
 end
 
 local function buildPanel()
-	panel = group("Results", Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.52), UDim2.fromOffset(600, 356))
+	panel = group("Results", Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(600, PANEL_HEIGHT))
+	panelScale = table.remove(scales) :: UIScale -- panel ma własną skalę i pozycję: ustawia je updateScale
 	panel.BackgroundColor3 = COLORS.panel
 	panel.BackgroundTransparency = 0.12
 	panel.Visible = false
@@ -325,7 +340,14 @@ local function buildPanel()
 		Size = UDim2.new(0.5, -30, 1, -24),
 		BackgroundTransparency = 1,
 	}, panel)
-	panelTitle = label({ Size = UDim2.new(1, 0, 0, 26), TextSize = 20, TextColor3 = COLORS.accent, Text = Texts.resultsTitle }, left)
+	-- W Wodnej bitwie tytuł niesie nazwę zwycięzcy, a prawa kolumna jest pusta, więc może zająć obie.
+	panelTitle = label({
+		Size = UDim2.new(if arena then 2 else 1, 0, 0, 26),
+		TextSize = 20,
+		TextColor3 = COLORS.accent,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Text = Texts.resultsTitle,
+	}, left)
 	buildRows(left, resultRows, RESULT_ROWS)
 	local medalTop = 30 + RESULT_ROWS * 22 + 2
 	medalLabel = label({
@@ -488,6 +510,7 @@ end
 -- Wodna bitwa: miejsca zamiast czasów, kolumna top 10 pusta. Wiersze to { userId, name, place }, kolejność = miejsce.
 local function showArenaResults(rows: any)
 	local ownPlace: number? = nil
+	local title = Texts.arena.resultsTitle
 	local shown = 0
 	if type(rows) == "table" then
 		for index, row in rows do
@@ -495,6 +518,9 @@ local function showArenaResults(rows: any)
 				local place = if type(row.place) == "number" then row.place else index
 				if row.userId == player.UserId then
 					ownPlace = place
+				end
+				if place == 1 then
+					title = if row.userId == player.UserId then Texts.arena.winnerSelf else string.format(Texts.arena.winner, tostring(row.name))
 				end
 				if shown < RESULT_ROWS then
 					shown += 1
@@ -509,7 +535,7 @@ local function showArenaResults(rows: any)
 	goalLabel.Text = ""
 	hideRows(topRows, 1)
 	topTitle.Visible = false
-	panelTitle.Text = Texts.arena.resultsTitle
+	panelTitle.Text = title
 	resetActions()
 	votesLabel.Text = ""
 	panel.Visible = true

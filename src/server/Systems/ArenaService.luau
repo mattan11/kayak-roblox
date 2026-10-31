@@ -1,6 +1,6 @@
 -- Wodna bitwa na serwerze (ARCHITECTURE.md, „Strefy na jeziorze i Wodna bitwa”). Zasady są w shared/ArenaRules, tutaj tylko świat
--- i sieć: co ARENA_TICK zbieramy migawkę kajaków, karmimy nią ArenaRules i rozsyłamy skutki. Trafienia i strefę rozstrzyga serwer
--- z pozycji Hull, a od klienta bierzemy tylko „chcę strzelić”, bez żadnych argumentów.
+-- i sieć: co ARENA_TICK zbieramy migawkę kajaków, karmimy nią ArenaRules i rozsyłamy skutki. Strumienie, zbiorniki i strefę rozstrzyga
+-- serwer z pozycji Hull, a od klienta bierzemy tylko „otwórz” albo „zamknij” strumień (ArenaFire(bool)).
 -- W trybach race i battle start() wychodzi od razu: żadnej pętli, żadnych handlerów. W arena z kolei RaceService milczy, więc
 -- RaceState nie idzie: fazy niesie ArenaState. Rekordy, medale, duchy i rankingi nie mają stąd żadnego wejścia.
 -- (Dla TS: kontroler nad reducerem, jak RaceService nad RaceLogic.)
@@ -36,6 +36,8 @@ local arenaHealth: RemoteEvent
 local arenaHit: RemoteEvent
 local arenaOut: RemoteEvent
 local arenaResults: RemoteEvent
+local arenaTank: RemoteEvent
+local arenaPush: RemoteEvent
 local resetEvent: RemoteEvent
 
 local function now(): number
@@ -104,6 +106,17 @@ local function sendHealth()
 	end
 end
 
+-- Zbiornik: tempo pilnuje ArenaRules.tankToSend. Kanał jest zawodny, ale kolejna zmiana i tak przyniesie świeży stan.
+local function sendTank(time: number)
+	for id, contender in match.contenders do
+		local player = Players:GetPlayerByUserId(id)
+		local tank = if player then ArenaRules.tankToSend(contender, time) else nil
+		if player and tank then
+			arenaTank:FireClient(player, tank)
+		end
+	end
+end
+
 -- Odpadnięty zostaje na wodzie: Finished zabiera mu stery, a kamera i świat działają dalej.
 local function sendOut(out: ArenaRules.Out)
 	arenaOut:FireAllClients(out.userId, out.name, out.place)
@@ -128,6 +141,7 @@ local function onPhase(phase: ArenaRules.Phase)
 		for _, player in Players:GetPlayers() do
 			seat(player)
 			arenaHealth:FireClient(player, Config.ARENA_HEALTH) -- pasek pełny już w odliczaniu
+			arenaTank:FireClient(player, 1)
 		end
 	elseif phase == "results" then
 		arenaResults:FireAllClients(match.rows)
@@ -148,11 +162,30 @@ local function sendVotes()
 	end
 end
 
+-- Jeden obieg walki: strefa, potem strumienie, a skutki rozsyłamy dopiero po policzeniu wszystkich.
+local function fight(time: number)
+	local fighters = snapshot()
+	for _, out in ArenaRules.burn(match, ArenaLayout, fighters, time) do
+		sendOut(out)
+	end
+	local result = ArenaRules.stream(match, ArenaLayout, fighters, time)
+	for _, hit in result.hits do
+		arenaHit:FireAllClients(hit.shooter, hit.target)
+	end
+	for _, entry in result.pushes do
+		local player = Players:GetPlayerByUserId(entry.id)
+		if player then
+			arenaPush:FireClient(player, entry.push.X, entry.push.Y)
+		end
+	end
+	for _, out in result.outs do
+		sendOut(out)
+	end
+end
+
 local function tick(time: number)
 	if match.phase == "racing" then
-		for _, out in ArenaRules.burn(match, ArenaLayout, snapshot(), time) do
-			sendOut(out)
-		end
+		fight(time)
 	end
 	local changed = ArenaRules.tick(match, time, roster())
 	-- Najpierw ArenaState, żeby klient znał fazę, zanim dostanie Reset albo wyniki.
@@ -161,6 +194,7 @@ local function tick(time: number)
 		onPhase(changed)
 	end
 	sendHealth()
+	sendTank(time)
 	sendVotes()
 	ArenaBuilder.setZone(radiusNow())
 	-- Serwer zarezerwowany nikogo już nie przyjmie: samotny gracz wraca do wioski, zamiast czekać bez końca.
@@ -171,20 +205,12 @@ local function tick(time: number)
 	end
 end
 
--- Od klienta to tylko prośba bez argumentów: kogo trafia i czy może strzelić, rozstrzyga ArenaRules z pozycji Hull.
--- Limit z Remotes tnie zalew zapytań, a odnowienie w ArenaRules pilnuje tempa strzałów. Odmowa jest cicha.
-local function onFire(player: Player)
-	local id = player.UserId
-	local shot = ArenaRules.fire(match, id, snapshot(), now())
-	if shot == nil then
-		return
+-- Od klienta to tylko prośba: jedyny argument musi być bool (dla TS: walidacja body na granicy API, typy tu nic nie gwarantują).
+-- Handler ustawia flagę, a wodę, cel i obrażenia liczy obieg z pozycji Hull, więc zalew zapytań nie daje dodatkowych strzałów.
+local function onFire(player: Player, open: any)
+	if type(open) == "boolean" then
+		ArenaRules.setFiring(match, player.UserId, open)
 	end
-	arenaHit:FireAllClients(id, shot.target)
-	if shot.out then
-		sendOut(shot.out)
-	end
-	sendHealth()
-	sendState()
 end
 
 -- Przyciski z ekranu wyników i „Wyjdź”. RaceService tu nie działa, więc obsługujemy je sami, tak samo jak w wyścigu.
@@ -224,6 +250,8 @@ function ArenaService.start()
 	arenaHit = Remotes.get("ArenaHit")
 	arenaOut = Remotes.get("ArenaOut")
 	arenaResults = Remotes.get("ArenaResults")
+	arenaTank = Remotes.get("ArenaTank")
+	arenaPush = Remotes.get("ArenaPush")
 	resetEvent = Remotes.get("Reset")
 	raceVotes = Remotes.get("RaceVotes")
 	TravelService.onGiveUp = function(player)

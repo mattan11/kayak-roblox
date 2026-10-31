@@ -64,11 +64,11 @@ return {
 
 	-- Wodna bitwa. Ikona to zwykły znak, bez wgrywanych obrazków.
 	arena = {
-		fire = "STRZAŁ",
+		fire = "STRUMIEŃ",
+		empty = "PUSTO", -- zbiornik pusty: ładuje się w ruchu
 		fireIcon = "🌊",
 		health = "Wytrzymałość %d",
 		alive = "Na wodzie: %d",
-		noTarget = "Nikogo w zasięgu",
 		zoneWarning = "Wracaj do strefy!",
 		outSelf = "Odpadasz! Miejsce %d",
 		outOther = "%s odpada",

@@ -156,3 +156,13 @@ Przełącznik Wyścig/Bitwa w `RiverPicker` znika: o trybie decyduje strefa. W `
 **Zdarzenia `Remotes`:** `ArenaFire` (klient → serwer), `ArenaState` (serwer → wszyscy: faza, koniec fazy, promień strefy, liczba żywych), `ArenaHealth` (serwer → gracz: wytrzymałość), `ArenaHit` (serwer → wszyscy: strzelający, cel lub nil), `ArenaOut` (serwer → wszyscy: userId, nazwa, miejsce), `ArenaResults` (serwer → wszyscy: lista).
 
 **Liczby:** `Config`, sekcja `-- Wodna bitwa`.
+
+### Walka w Wodnej bitwie 2.0 (2026-10-31)
+
+Strumień zamiast pojedynczych strzałów. `ArenaFire(true/false)` otwiera i zamyka strumień, a serwer liczy co 0,1 s: zbiornik, cel, obrażenia i odepchnięcie.
+
+- **Zbiornik:** pełny starcza na 4 s strumienia. Ładuje się w ruchu: pełne ładowanie w 8–10 s przy płynięciu, bardzo wolno w miejscu. Prędkość serwer bierze z pozycji `Hull`. Klient dostaje `ArenaTank(0..1)`.
+- **Obrażenia:** 8 na sekundę, trafienie w bok lub tył × 1,5, liczone z kursu celu.
+- **Odepchnięcie:** `ArenaPush(dx, dz)` idzie do ofiary, a jej klient dodaje to do prędkości kajaka.
+- **Osłony:** strumień nie przechodzi przez `ArenaLayout.obstacles` (przecięcie odcinka z kołem).
+- **Cel:** szerszy stożek, najbliższy gracz; `ArenaHit` dalej pokazuje strumień innym.

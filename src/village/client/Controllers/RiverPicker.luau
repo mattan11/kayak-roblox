@@ -3,7 +3,7 @@
 -- w React. Serwer rozgłasza stan KAŻDEJ kolejki (QueueState), a klient wybiera tę, do której dołączył
 -- (dla TS: globalny store z websocketa + selektor po `joined`).
 -- Układ w pikselach dla wysokości telefonu, UIScale dopasowuje go do ekranu, jak w HudController.
--- Cały ekran to pola wiosła, a kciuki leżą przy dolnych rogach, więc przycisk stoi u góry na środku, a panel między rogami.
+-- Cały ekran to pola wiosła, a kciuki leżą przy dolnych rogach, więc przycisk stoi u góry na środku, a panel z prawej, na środku wysokości.
 -- O trybie decyduje strefa, w której jest kajak (atrybut Mode na QueueZone): `zoneMode` to tryb strefy, `joinedMode` tryb kolejki gracza.
 -- race i battle otwierają okno rzek, arena od razu ustawia w kolejce, bo Wodna bitwa ma jedną stałą „rzekę” (ARENA_ENTRY).
 -- Kolejki są osobne dla rzeki i trybu, więc queues ma klucz złożony z obu (dla TS: Map z kluczem "rzeka|tryb").
@@ -499,8 +499,8 @@ end
 local function buildPanel()
 	panel = make("Frame", {
 		Name = "Queue",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(Config.PIER_PANEL_LEFT, 0, 1, -8),
+		AnchorPoint = Vector2.new(1, 0.5), -- z prawej, na środku wysokości, jak panel nauki: kajak na środku zostaje odsłonięty
+		Position = UDim2.new(1, -Config.PIER_PANEL_RIGHT, 0.5, 0),
 		Size = UDim2.fromOffset(Config.PIER_PANEL_WIDTH, PANEL_HEIGHT),
 		BackgroundColor3 = COLORS.panel,
 		BackgroundTransparency = 0.12,

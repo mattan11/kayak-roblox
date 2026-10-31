@@ -1,6 +1,6 @@
 -- Zasady Wodnej bitwy: czysta logika bez Instance, bez zegara i bez sieci (testy: logic/ArenaRules.spec, kontrakt: ARCHITECTURE.md).
--- Maszyna faz serwera, obrażenia, stożek celu, zwężanie strefy, kolejność odpadania i wynik po czasie. Czas `now` podaje wołający,
--- a świat wchodzi jako migawka pozycji, którą Systems/ArenaService sam odczytał z Hull. Klient niczego tu nie dostarcza.
+-- Maszyna faz serwera, strumień (zbiornik, cel, osłony, obrażenia, odepchnięcie), zwężanie strefy, kolejność odpadania i wynik po czasie.
+-- Czas `now` podaje wołający, a świat wchodzi jako migawka pozycji, którą Systems/ArenaService sam odczytał z Hull. Klient niczego tu nie dostarcza.
 -- (Dla TS: reducer: `(state, action) => effects`, jak BattleRules i RaceLogic. Zegar wstrzyknięty jak w testach z fake timers.)
 --
 -- Fazy mają te same nazwy co RaceLogic, a „racing” to tutaj walka: klient liczy fizykę w tej samej fazie co w wyścigu.
@@ -16,11 +16,20 @@ export type Contender = {
 	id: number,
 	name: string,
 	health: number, -- ułamkowa: strefa pali po trochu w każdym obiegu
-	readyAt: number, -- od kiedy wolno strzelić
 	place: number?, -- nil = wciąż na wodzie i w grze
+	firing: boolean, -- czy strumień jest otwarty
+	tank: number, -- zbiornik 0..1
+	tankSent: number?, -- ostatnia wartość wysłana do gracza; nil = jeszcze nic
+	tankSentAt: number,
+	lastPosition: Vector2?, -- pozycja z poprzedniego obiegu, z niej liczymy prędkość
+	hitShownAt: number, -- kiedy ten strzelec ostatnio pokazał trafienie innym
+	push: Vector2, -- odepchnięcie zebrane, a jeszcze niewysłane
+	pushSentAt: number,
 }
 export type Out = { userId: number, name: string, place: number }
-export type Shot = { target: number?, out: Out? }
+export type Hit = { shooter: number, target: number }
+export type Push = { id: number, push: Vector2 }
+export type StreamResult = { hits: { Hit }, pushes: { Push }, outs: { Out } }
 export type Row = { userId: number, name: string, place: number, health: number }
 export type Match = {
 	phase: Phase,
@@ -35,6 +44,7 @@ export type Match = {
 	startedAt: number?, -- start walki; z niego liczymy strefę
 	endedAt: number?, -- koniec walki: strefa zatrzymuje się na ekranie wyników
 	burnedAt: number, -- ostatnie liczenie obrażeń strefy
+	streamedAt: number, -- ostatnie liczenie strumieni i zbiorników
 	rows: { Row }, -- wyniki ostatniej rundy, od pierwszego miejsca
 	againVotes: { [number]: boolean }, -- kto kliknął „Jeszcze raz”
 	leaving: { [number]: boolean }, -- kto kliknął „Do wioski” i jeszcze jest na serwerze
@@ -93,8 +103,77 @@ local function livingOf(match: Match, id: number): Contender?
 	return nil
 end
 
+-- Zbiornik ------------------------------------------------------------------------------------------------------------------
+
+-- Opróżnianie przez `dt` sekund strumienia. Zwraca nowy stan i ile sekund strumienia naprawdę poszło:
+-- końcówka zbiornika daje tylko tyle obrażeń, ile było w niej wody.
+function ArenaRules.drain(tank: number, dt: number): (number, number)
+	local available = tank * Config.ARENA_TANK_SECONDS
+	if dt >= available then
+		return 0, available
+	end
+	return tank - dt / Config.ARENA_TANK_SECONDS, dt
+end
+
+-- Ładowanie przez `dt` sekund: od wolnego w miejscu do pełnego od ARENA_TANK_FULL_SPEED.
+-- Szybciej się nie da, więc podkręcony ruch kajaka daje najwyżej zwykłe pełne ładowanie. NaN liczymy jak postój.
+function ArenaRules.refill(tank: number, speed: number, dt: number): number
+	local share = if speed > 0 then math.min(speed / Config.ARENA_TANK_FULL_SPEED, 1) else 0
+	local idleRate, fullRate = 1 / Config.ARENA_TANK_IDLE_TIME, 1 / Config.ARENA_TANK_FULL_TIME
+	return math.min(tank + (idleRate + (fullRate - idleRate) * share) * dt, 1)
+end
+
+-- Wartość do wysłania albo nil: nowa, a od poprzedniej minęło ARENA_TANK_INTERVAL. (Dla TS: throttle, który zapamiętuje ostatni stan.)
+function ArenaRules.tankToSend(contender: Contender, now: number): number?
+	if contender.tank == contender.tankSent or now < contender.tankSentAt + Config.ARENA_TANK_INTERVAL then
+		return nil
+	end
+	contender.tankSent, contender.tankSentAt = contender.tank, now
+	return contender.tank
+end
+
+-- Strumień ------------------------------------------------------------------------------------------------------------------
+
+-- Czy odcinek przecina koło? Szukamy punktu odcinka najbliższego środka koła: rzut na prostą przycięty do 0..1.
+-- Brzeg koła też zasłania. Odcinek o zerowej długości to po prostu punkt `from`.
+function ArenaRules.segmentHitsCircle(from: Vector2, to: Vector2, center: Vector2, radius: number): boolean
+	local along = to - from
+	local lengthSquared = along:Dot(along)
+	local share = if lengthSquared > 0 then math.clamp((center - from):Dot(along) / lengthSquared, 0, 1) else 0
+	return (from + along * share - center).Magnitude <= radius
+end
+
+local function shielded(from: Vector2, to: Vector2, obstacles: { any }): boolean
+	for _, obstacle in obstacles do
+		if ArenaRules.segmentHitsCircle(from, to, obstacle.position, obstacle.radius) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Mnożnik z kursu celu: strzelec przed jego dziobem to 1, a bok i tył to ARENA_FLANK_MULTIPLIER.
+-- Dwa kajaki w jednym punkcie: kierunek nieokreślony, liczymy jak z przodu.
+function ArenaRules.flankMultiplier(shooter: Vector2, target: Fighter): number
+	local offset = shooter - target.position
+	if offset.Magnitude == 0 or offset.Unit:Dot(target.forward) >= Config.ARENA_FRONT_ARC_COS then
+		return 1
+	end
+	return Config.ARENA_FLANK_MULTIPLIER
+end
+
+-- Odepchnięcie za `seconds` trafiania: wzdłuż strumienia, od strzelca. Kajaki w jednym punkcie: bez kierunku nie pchamy.
+function ArenaRules.pushFor(shooter: Vector2, target: Vector2, seconds: number): Vector2
+	local offset = target - shooter
+	if offset.Magnitude == 0 then
+		return Vector2.zero
+	end
+	return offset.Unit * (Config.ARENA_PUSH_PER_SECOND * seconds)
+end
+
 -- Najbliższy żywy cel w stożku przed dziobem albo nil. Remis odległości rozstrzyga niższe id.
-function ArenaRules.pickTarget(match: Match, shooterId: number, fighters: { [number]: Fighter }): number?
+-- Cel za przeszkodą nie istnieje dla strumienia, więc wygrywa dalszy, ale odsłonięty.
+function ArenaRules.pickTarget(match: Match, shooterId: number, fighters: { [number]: Fighter }, obstacles: { any }?): number?
 	local shooter = fighters[shooterId]
 	if shooter == nil then
 		return nil
@@ -107,7 +186,12 @@ function ArenaRules.pickTarget(match: Match, shooterId: number, fighters: { [num
 			local distance = offset.Magnitude
 			-- Dwa kajaki w jednym punkcie: kierunek nieokreślony (Unit dałby NaN), więc cel uznajemy za trafiony.
 			local facing = if distance > 0 then offset.Unit:Dot(shooter.forward) else 1
-			if distance <= Config.ARENA_CANNON_RANGE and distance < bestDistance and facing >= Config.ARENA_CANNON_ARC_COS then
+			if
+				distance <= Config.ARENA_CANNON_RANGE
+				and distance < bestDistance
+				and facing >= Config.ARENA_CANNON_ARC_COS
+				and not shielded(shooter.position, fighters[id].position, obstacles or {})
+			then
 				bestId, bestDistance = id, distance
 			end
 		end
@@ -115,29 +199,84 @@ function ArenaRules.pickTarget(match: Match, shooterId: number, fighters: { [num
 	return bestId
 end
 
--- Gracz odpada. Miejsce = ilu było żywych przed nim, więc kto odpadł wcześniej, ma gorsze miejsce.
+-- Gracz odpada. Miejsce = ilu było żywych przed nim, więc kto odpadł wcześniej, ma gorsze miejsce. Jego strumień gaśnie.
 local function eliminate(match: Match, contender: Contender): Out
 	contender.health = 0
+	contender.firing = false
 	contender.place = match.alive
 	match.alive -= 1
 	return { userId = contender.id, name = contender.name, place = contender.place :: number }
 end
 
--- Strzał. Nil = odmowa: nie ta faza, gracz poza grą, brak kajaka albo trwa odnowienie.
--- Strzał bez celu też zużywa odnowienie: inaczej klient mógłby sprawdzać zasięg za darmo, 4 razy na sekundę.
-function ArenaRules.fire(match: Match, id: number, fighters: { [number]: Fighter }, now: number): Shot?
+-- Prośba klienta o otwarcie lub zamknięcie strumienia. Odmowa jest cicha: walka trwa tylko w „racing”, a pusty zbiornik nie otwiera.
+function ArenaRules.setFiring(match: Match, id: number, open: boolean)
 	local contender = livingOf(match, id)
-	if match.phase ~= "racing" or contender == nil or fighters[id] == nil or now < contender.readyAt then
-		return nil
+	if match.phase ~= "racing" or contender == nil or (open and contender.tank <= 0) then
+		return
 	end
-	contender.readyAt = now + Config.ARENA_COOLDOWN
-	local target = ArenaRules.pickTarget(match, id, fighters)
-	if target == nil then
-		return { target = nil, out = nil }
+	contender.firing = open
+end
+
+-- Jeden gracz w obiegu: zbiornik, a przy otwartym strumieniu także trafienie. Ofiara zbiera odepchnięcie, wysyłane potem razem.
+local function streamOne(match: Match, contender: Contender, layout: any, fighters: { [number]: Fighter }, dt: number, now: number, result: StreamResult)
+	local fighter = fighters[contender.id]
+	if fighter == nil then
+		contender.firing, contender.lastPosition = false, nil -- bez kajaka nie ma strumienia ani pomiaru prędkości
+		return
 	end
-	local victim = match.contenders[target]
-	victim.health = ArenaRules.damage(victim.health, Config.ARENA_CANNON_DAMAGE)
-	return { target = target, out = if victim.health <= 0 then eliminate(match, victim) else nil }
+	local last = contender.lastPosition
+	local speed = if last and dt > 0 then (fighter.position - last).Magnitude / dt else 0
+	contender.lastPosition = fighter.position
+	if not contender.firing then
+		contender.tank = ArenaRules.refill(contender.tank, speed, dt)
+		return
+	end
+
+	local left, seconds = ArenaRules.drain(contender.tank, dt)
+	contender.tank = left
+	contender.firing = left > 0
+	local targetId = ArenaRules.pickTarget(match, contender.id, fighters, layout.obstacles)
+	if targetId == nil or seconds <= 0 then
+		return
+	end
+	local victim, target = match.contenders[targetId], fighters[targetId]
+	local amount = Config.ARENA_STREAM_DPS * seconds * ArenaRules.flankMultiplier(fighter.position, target)
+	victim.health = ArenaRules.damage(victim.health, amount)
+	victim.push += ArenaRules.pushFor(fighter.position, target.position, seconds)
+	if now >= contender.hitShownAt + Config.ARENA_HIT_INTERVAL then
+		contender.hitShownAt = now
+		table.insert(result.hits, { shooter = contender.id, target = targetId })
+	end
+	if victim.health <= 0 then
+		table.insert(result.outs, eliminate(match, victim))
+	end
+end
+
+-- Jeden obieg walki. Id rosnąco, więc wynik jest powtarzalny: gdy dwóch dobija się nawzajem w tym samym obiegu, żyje niższe id,
+-- a runda nie kończy się bez zwycięzcy. Czas tnie ten sam limit co strefę: przycięcie serwera nie opróżnia zbiornika jednym obiegiem.
+function ArenaRules.stream(match: Match, layout: any, fighters: { [number]: Fighter }, now: number): StreamResult
+	local result: StreamResult = { hits = {}, pushes = {}, outs = {} }
+	if match.phase ~= "racing" then
+		return result
+	end
+	local dt = math.clamp(now - match.streamedAt, 0, Config.ARENA_BURN_MAX_STEP)
+	match.streamedAt = now
+	local ids = sortedIds(match.contenders)
+	for _, id in ids do
+		local contender = livingOf(match, id)
+		if contender then
+			streamOne(match, contender, layout, fighters, dt, now, result)
+		end
+	end
+	-- Odepchnięcie zbiorcze: kilku strzelców i kilka obiegów to jedno zdarzenie do ofiary.
+	for _, id in ids do
+		local contender = livingOf(match, id)
+		if contender and contender.push ~= Vector2.zero and now >= contender.pushSentAt + Config.ARENA_HIT_INTERVAL then
+			table.insert(result.pushes, { id = id, push = contender.push })
+			contender.push, contender.pushSentAt = Vector2.zero, now
+		end
+	end
+	return result
 end
 
 -- Strefa: obrażenia za czas od poprzedniego liczenia, tylko dla żywych z kajakiem. Przycięcie serwera nie zabija jednym obiegiem.
@@ -199,14 +338,27 @@ end
 local function startRound(match: Match, roster: { Entrant }, now: number)
 	match.contenders = {}
 	for _, entrant in roster do
-		match.contenders[entrant.id] =
-			{ id = entrant.id, name = entrant.name, health = Config.ARENA_HEALTH, readyAt = 0, place = nil }
+		match.contenders[entrant.id] = {
+			id = entrant.id,
+			name = entrant.name,
+			health = Config.ARENA_HEALTH,
+			place = nil,
+			firing = false,
+			tank = 1,
+			tankSent = nil,
+			tankSentAt = -math.huge,
+			lastPosition = nil,
+			hitShownAt = -math.huge,
+			push = Vector2.zero,
+			pushSentAt = -math.huge,
+		}
 	end
 	match.entrants = #roster
 	match.alive = #roster
 	match.startedAt = now
 	match.endedAt = nil
 	match.burnedAt = now
+	match.streamedAt = now
 	match.rows = {}
 end
 
@@ -259,6 +411,7 @@ function ArenaRules.newMatch(expected: number?, minPlayers: number): Match
 		startedAt = nil,
 		endedAt = nil,
 		burnedAt = 0,
+		streamedAt = 0,
 		rows = {},
 		againVotes = {},
 		leaving = {},

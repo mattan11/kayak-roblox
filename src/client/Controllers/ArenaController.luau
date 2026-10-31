@@ -1,12 +1,14 @@
--- Wodna bitwa po stronie klienta (ARCHITECTURE.md, sekcja „Strefy na jeziorze i Wodna bitwa”): przycisk strzału, pasek
--- wytrzymałości, licznik żywych, strumienie wody, pierścień strefy, widok odpadnięcia i komunikat o zwycięzcy.
+-- Wodna bitwa po stronie klienta (ARCHITECTURE.md, sekcje „Strefy na jeziorze i Wodna bitwa” i „Walka w Wodnej bitwie 2.0”):
+-- przycisk strumienia z paskiem zbiornika, pasek wytrzymałości, licznik żywych, strumienie wody, znacznik celu, pierścień
+-- strefy i widok odpadnięcia. Zwycięzcę pokazuje tytuł panelu wyników w HudController.
 -- Działa tylko, gdy workspace.RaceMode == "arena"; w innych trybach nie tworzy niczego i nie ma żadnych połączeń.
--- Klient tylko rysuje i prosi o strzał (ArenaFire). Cel, trafienie i obrażenia liczy serwer.
+-- Klient tylko rysuje i otwiera lub zamyka strumień (ArenaFire(true/false)), jak mousedown i mouseup w TS. Zbiornik, cel,
+-- obrażenia i odepchnięcie liczy serwer. Znacznik celu to lokalna podpowiedź, ostatnie słowo należy do serwera.
 -- Fazę, promień strefy i liczbę żywych zapisuje do Session KayakController, a tu przychodzą zdarzeniami "phase" i "arenaState".
 --
 -- Telefon: strumienie to gotowa pula Beamów, a pierścień to stała lista paneli (dla TS: object pool, bez new w trakcie gry).
 -- Pętla klatki istnieje tylko wtedy, gdy leci strumień, i sama się odpina (dla TS: requestAnimationFrame, który się nie
--- odnawia). Strefa i ostrzeżenie odświeżają się 5 razy na sekundę, tylko w trakcie walki. Pasek i odnowienie animuje Tween.
+-- odnawia). Znacznik celu odświeża się 10 razy na sekundę, a strefa i ostrzeżenie 5 razy, tylko w trakcie walki.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,6 +17,8 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ArenaLayout = require(Shared:WaitForChild("content"):WaitForChild("ArenaLayout"))
+local ArenaRules = require(Shared:WaitForChild("ArenaRules"))
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
@@ -33,19 +37,22 @@ local PANEL_COLOR = Color3.fromRGB(16, 34, 48)
 local TRACK_COLOR = Color3.fromRGB(10, 22, 32)
 local SPRAY_TEXTURE = "rbxasset://textures/particles/smoke_main.dds" -- wbudowana w klienta, bez uploadu
 
--- Zasady są u serwera; te dwie liczby służą tylko do wyglądu i rytmu przycisku. Do czasu wpisania ich do Config działają wartości z kontraktu.
+-- Zasady są u serwera; ta liczba służy tylko do wyglądu paska.
 local MAX_HEALTH = Config.ARENA_HEALTH or 100
-local FIRE_COOLDOWN = (Config.ARENA_COOLDOWN or 1) + 0.05 -- zapas na opóźnienia sieci: serwer nie odrzuci strzału przy trzymaniu
 
 -- Wygląd (tylko klient, bez wpływu na zasady).
-local JET_POOL = 4 -- 8 graczy × 1 strzał/s × JET_TIME to średnio 2 strumienie naraz
-local JET_TIME = 0.28
+local JET_POOL = 8 -- po jednym na gracza, bo jeden gracz ma najwyżej jeden strumień
+local JET_HOLD = Config.ARENA_HIT_INTERVAL + 0.15 -- strumień gaśnie tyle s po ostatnim ArenaHit; musi być dłuższe niż odstęp między nimi
 local JET_REACH = 40 -- pudło: strumień leci tyle przed dziób
+local HIT_SPRAY = 12 -- rozbryzg przy każdym ArenaHit w cel
+local PUSH_SPRAY = 10 -- rozbryzg przy odepchnięciu własnego kajaka
+local HIT_FEEL_GAP = 0.4 -- strumień trafia wiele razy na sekundę, a błysk i drżenie nie mogą migać w tym tempie
 local RING_SEGMENTS = 36
 local RING_HEIGHT = 16
 local RING_THICKNESS = 0.6
 local RING_Y = 6 -- środek panelu nad lustrem wody
 local RING_OVERLAP = 1.03 -- panele lekko na siebie zachodzą, bez szpar
+local AIM_TICK = 0.1
 local ZONE_TICK = 0.2
 local ZONE_MIN_STEP = 0.05 -- mniejszej zmiany promienia nie warto rysować
 local ZONE_MAX_RATE = 10 -- studs/s; zabezpieczenie przed dwoma stanami tuż po sobie
@@ -53,11 +60,20 @@ local ZONE_MIN_GAP = 0.2 -- krótszy odstęp między stanami nie mówi nic o tem
 local ZONE_PREDICT = 1.5 -- tyle s dalej zwężamy sami, gdy kolejny stan się spóźnia
 local BUTTON_SIZE = 124
 local BUTTON_X, BUTTON_Y = 0.78, 0.7 -- to samo miejsce co przycisk przedmiotu w Bitwie
+local TANK_BAR_HEIGHT = 12
+local TANK_BAR_GAP = 8 -- odstęp paska zbiornika od przycisku
+local TANK_LOW = 0.25
+local TANK_EMPTY = 0.02 -- od tego poziomu w dół przycisk pokazuje „PUSTO”
+local TANK_READY = 0.1 -- „PUSTO” znika dopiero tutaj: inaczej przy trzymaniu napis i strumień migałyby co odczyt zbiornika
+local AIM_HEIGHT = 5 -- znacznik celu nad kajakiem
 local LOW_HEALTH = 0.3
 local TOAST_TIME = 1.6
 local OUT_TOAST_TIME = 3
 local FLASH_TRANSPARENCY = 0.78
 local BAR_TWEEN = TweenInfo.new(0.2)
+local TANK_TWEEN = TweenInfo.new(Config.ARENA_TANK_INTERVAL, Enum.EasingStyle.Linear) -- między odczytami pasek płynie sam
+local HOLD_RESEND = 0.5 -- przy trzymaniu tak często ponawiamy ArenaFire(true); limit serwera to 10 na sekundę
+local PRESS_SCALE = 0.9 -- wciśnięty przycisk jest mniejszy przez cały czas trzymania
 local PRESS_POP = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local KEYS = { [Enum.KeyCode.F] = true, [Enum.KeyCode.ButtonX] = true }
 
@@ -88,27 +104,34 @@ local healthFill: Frame = nil
 local healthLabel: TextLabel = nil
 local aliveLabel: TextLabel = nil
 local fireButton: TextButton = nil
-local cooldownCover: Frame = nil
+local fireStroke: UIStroke = nil
+local fireCaption: TextLabel = nil
+local emptyCover: Frame = nil
+local tankFill: Frame = nil
 local pressScale: UIScale = nil
+local aimMarker: BillboardGui = nil
 local toastLabel: TextLabel = nil
 local warningLabel: TextLabel = nil
 local warningPulse: Tween = nil
 local warningTint: Frame = nil
 local watchLabel: TextLabel = nil
-local winnerLabel: TextLabel = nil
 local flash: Frame = nil
 
 local eliminated = false
 local warned = false
 local zoneTicking = false
-local readyAt = 0 -- os.clock(), od kiedy wolno strzelić
-local holdInput: InputObject? = nil -- palec lub klawisz trzymający ogień
-local holdToken = 0 -- zmiana unieważnia pętlę ognia (dla TS: jak AbortController)
+local tankEmpty = false
+local aimed: BasePart? = nil -- kadłub pod znacznikiem celu
+local holdInput: InputObject? = nil -- palec lub klawisz trzymający strumień; nil = strumień zamknięty
+local resendAt = 0 -- os.clock(), kiedy ponowić ArenaFire(true) przy trzymaniu
+local feelAt = 0 -- os.clock(), od kiedy wolno znowu dać błysk i drżenie
 local toastToken = 0
 
 local zoneRadius: number? = nil -- ostatni promień od serwera
 local zoneAt = 0 -- os.clock() tego stanu
 local zoneRate = 0 -- studs/s, zmierzone z dwóch ostatnich stanów
+
+local dropStuckHold: () -> () -- deklaracja wyprzedzająca (dla TS: hoisting), treść w sekcji interfejsu
 
 -- Pomocnicze ----------------------------------------------------------------------------------------------------------------
 
@@ -206,23 +229,15 @@ local function stopJet(jet: Jet)
 	jet.beam.Enabled = false
 end
 
--- Oba kajaki płyną dalej, więc przez ułamek sekundy pilnujemy końców strumienia. Pod koniec rozbryzg na trafionym.
+-- Oba kajaki płyną dalej, więc co klatkę pilnujemy końców strumienia, aż przestanie go podtrzymywać ArenaHit.
 local function updateJet(jet: Jet, now: number)
 	local from = jet.from
-	if from == nil or from.Parent == nil then
-		stopJet(jet)
-		return
-	end
-	local target = jetTarget(jet, from)
-	if now >= jet.endsAt then
-		if jet.to then
-			burst(target, 24)
-		end
+	if from == nil or from.Parent == nil or now >= jet.endsAt then
 		stopJet(jet)
 		return
 	end
 	jet.start.WorldPosition = from.Position + from.CFrame.LookVector * 3
-	jet.finish.WorldPosition = target
+	jet.finish.WorldPosition = jetTarget(jet, from)
 end
 
 local function onFrame()
@@ -240,23 +255,29 @@ local function onFrame()
 	end
 end
 
-local function playJet(from: BasePart, to: BasePart?)
+-- Każdy ArenaHit przedłuża strumień tego strzelca (dla TS: debounce, który gasi efekt, gdy zdarzenia przestają przychodzić).
+-- Klucz to kadłub strzelca, więc jeden gracz nigdy nie zajmuje dwóch Beamów, a zmiana celu tylko przestawia koniec.
+local function showJet(from: BasePart, to: BasePart?)
+	local free: Jet? = nil
 	for _, jet in jets do
-		if jet.endsAt == 0 then
-			jet.from, jet.to = from, to
-			jet.endsAt = os.clock() + JET_TIME
-			jet.start.WorldPosition = from.Position + from.CFrame.LookVector * 3
-			jet.finish.WorldPosition = jetTarget(jet, from)
-			jet.beam.Enabled = true
-			if frameConnection == nil then
-				frameConnection = RunService.Heartbeat:Connect(onFrame)
-			end
+		if jet.from == from then
+			jet.to = to
+			jet.endsAt = os.clock() + JET_HOLD
 			return
 		end
+		if free == nil and jet.endsAt == 0 then
+			free = jet
+		end
 	end
-	-- Pełna pula: bez strumienia, ale gracz ma widzieć trafienie
-	if to then
-		burst(to.Position, 24)
+	if free then
+		free.from, free.to = from, to
+		free.endsAt = os.clock() + JET_HOLD
+		free.start.WorldPosition = from.Position + from.CFrame.LookVector * 3
+		free.finish.WorldPosition = jetTarget(free, from)
+		free.beam.Enabled = true
+		if frameConnection == nil then
+			frameConnection = RunService.Heartbeat:Connect(onFrame)
+		end
 	end
 end
 
@@ -340,18 +361,94 @@ local function zoneTick()
 	setWarning(outside)
 end
 
-local function startZoneTicks()
+-- Znacznik celu ------------------------------------------------------------------------------------------------------------
+-- Tylko dla czytelności: pokazuje, kogo strumień prawdopodobnie trafi. Serwer liczy cel sam, z pozycji Hull.
+
+local function canFire(): boolean
+	return Session.phase == "racing" and not eliminated and Session.state ~= nil
+end
+
+local function setAim(target: BasePart?)
+	if target ~= aimed then
+		aimed = target
+		aimMarker.Adornee = target
+		aimMarker.Enabled = target ~= nil
+	end
+end
+
+-- Czy strumień do tego punktu przejdzie? Przeszkody i test odcinka z kołem te same, co na serwerze.
+local function shielded(from: Vector2, to: Vector2): boolean
+	for _, obstacle in ArenaLayout.obstacles do
+		if ArenaRules.segmentHitsCircle(from, to, obstacle.position, obstacle.radius) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Najbliższy żywy gracz w stożku przed dziobem, nieosłonięty. Te same progi co ArenaRules.pickTarget, ale bez jego `match`
+-- (dla TS: selektor na danych z ekranu, bo stan rundy zna tylko serwer); odpadnięci mają atrybut Finished.
+local function findTarget(): BasePart?
+	local own = Session.ownHull
+	if own == nil then
+		return nil
+	end
+	local look = own.CFrame.LookVector
+	local forward = Vector2.new(look.X, look.Z)
+	if forward.Magnitude == 0 then
+		return nil
+	end
+	forward = forward.Unit
+	local origin = Vector2.new(own.Position.X, own.Position.Z)
+	local best: BasePart? = nil
+	local bestDistance = Config.ARENA_CANNON_RANGE
+	for _, model in Session.kayaks do
+		local hull = model.PrimaryPart
+		if hull and hull ~= own and not model:GetAttribute("Finished") then
+			local position = Vector2.new(hull.Position.X, hull.Position.Z)
+			local offset = position - origin
+			local distance = offset.Magnitude
+			if distance <= bestDistance and distance > 0 and offset.Unit:Dot(forward) >= Config.ARENA_CANNON_ARC_COS and not shielded(origin, position) then
+				best, bestDistance = hull, distance
+			end
+		end
+	end
+	return best
+end
+
+-- Wspólna pętla rundy: znacznik co AIM_TICK, strefa co ZONE_TICK. Żyje tylko w fazie racing.
+local function startRoundTicks()
 	if zoneTicking then
 		return
 	end
 	zoneTicking = true
 	task.spawn(function()
+		local zoneDue = 0
 		while Session.phase == "racing" do
-			zoneTick()
-			task.wait(ZONE_TICK)
+			dropStuckHold()
+			setAim(if canFire() then findTarget() else nil)
+			-- ArenaHit idzie tylko przy trafieniu, a gracz ma widzieć wodę także wtedy, gdy strzela w pustkę.
+			local own = Session.ownHull
+			if holdInput and own and not tankEmpty then
+				showJet(own, aimed)
+			end
+			local now = os.clock()
+			-- Serwer gasi strumień przy pustym zbiorniku i sam go nie otwiera, a ArenaTank jest kanałem zawodnym, więc jeden
+			-- komunikat „woda wróciła” mógłby przepaść. Dlatego trzymany przycisk prosi cyklicznie (dla TS: retry zamiast jednego
+			-- fetch). Przy „PUSTO” milczymy, żeby nie robić krótkich zrywów strumienia z resztek wody.
+			if holdInput and not tankEmpty and now >= resendAt then
+				resendAt = now + HOLD_RESEND
+				fireRemote:FireServer(true)
+			end
+			if now >= zoneDue then
+				zoneDue = now + ZONE_TICK
+				zoneTick()
+			end
+			task.wait(AIM_TICK)
 		end
 		zoneTicking = false
 		setWarning(false)
+		setAim(nil)
 	end)
 end
 
@@ -377,7 +474,15 @@ end
 
 -- Interfejs -----------------------------------------------------------------------------------------------------------------
 
+local function hideToast()
+	toastToken += 1
+	toastLabel.Visible = false
+end
+
 local function showToast(text: string, duration: number)
+	if Session.phase == "results" then
+		return -- panel wyników już mówi, kto na którym miejscu; napis nie może na niego nachodzić
+	end
 	toastToken += 1
 	local token = toastToken
 	toastLabel.Text = text
@@ -408,44 +513,51 @@ local function setHealth(health: number)
 	TweenService:Create(healthFill, BAR_TWEEN, { Size = UDim2.fromScale(share, 1) }):Play()
 end
 
-local function canFire(): boolean
-	return Session.phase == "racing" and not eliminated and Session.state ~= nil
-end
-
-local function stopHold()
-	holdToken += 1
-	holdInput = nil
-end
-
-local function tryFire()
-	local now = os.clock()
-	if not canFire() or now < readyAt then
-		return
+local function setTank(value: number)
+	local share = math.clamp(value, 0, 1)
+	TweenService:Create(tankFill, TANK_TWEEN, { Size = UDim2.fromScale(share, 1) }):Play()
+	tankFill.BackgroundColor3 = if share <= TANK_LOW then WARN_COLOR else WATER_COLOR
+	local empty = if tankEmpty then share < TANK_READY else share <= TANK_EMPTY
+	if empty ~= tankEmpty then
+		tankEmpty = empty
+		emptyCover.Visible = empty
+		fireCaption.Text = if empty then Texts.empty else Texts.fire
+		fireCaption.TextColor3 = if empty then WARN_COLOR else WATER_COLOR
+		fireStroke.Color = if empty then WARN_COLOR else WATER_COLOR
+		if not empty then
+			resendAt = 0 -- woda wróciła: trzymany przycisk poprosi o strumień w najbliższym obiegu pętli rundy
+		end
 	end
-	readyAt = now + FIRE_COOLDOWN
-	fireRemote:FireServer()
-
-	pressScale.Scale = 0.88
-	TweenService:Create(pressScale, PRESS_POP, { Scale = 1 }):Play()
-	-- Odnowienie widać jako ciemną nakładkę, która znika. Animuje silnik, bez pracy w klatce.
-	cooldownCover.BackgroundTransparency = 0.35
-	TweenService:Create(cooldownCover, TweenInfo.new(FIRE_COOLDOWN, Enum.EasingStyle.Linear), { BackgroundTransparency = 1 }):Play()
 end
 
--- Trzymanie = ciągły ogień: pętla żyje tylko od wciśnięcia do puszczenia.
+-- Wciśnięcie otwiera strumień, puszczenie zamyka. Zbiornika tu nie sprawdzamy: decyduje serwer.
 local function beginHold(input: InputObject)
-	if holdInput ~= nil then
+	if holdInput ~= nil or not canFire() then
 		return
 	end
 	holdInput = input
-	holdToken += 1
-	local token = holdToken
-	task.spawn(function()
-		while token == holdToken do
-			tryFire()
-			task.wait(math.max(readyAt - os.clock(), 0.05))
-		end
-	end)
+	resendAt = os.clock() + HOLD_RESEND
+	fireRemote:FireServer(true)
+	pressScale.Scale = PRESS_SCALE
+end
+
+local function stopHold()
+	if holdInput == nil then
+		return
+	end
+	holdInput = nil
+	fireRemote:FireServer(false)
+	TweenService:Create(pressScale, PRESS_POP, { Scale = 1 }):Play()
+end
+
+-- Bezpiecznik: systemowy gest przerywa dotyk i InputEnded może nie przyjść. Bez tego strumień lałby się do końca zbiornika,
+-- a kolejne wciśnięcia nic by nie dawały, bo holdInput jest zajęty. Klawisz po puszczeniu może mieć inny InputObject,
+-- a jego koniec trzymania wykrywa endsHold.
+dropStuckHold = function()
+	local held = holdInput
+	if held and (held.UserInputState == Enum.UserInputState.End or held.UserInputState == Enum.UserInputState.Cancel) then
+		stopHold()
+	end
 end
 
 -- Dotyk rozpoznajemy po obiekcie (dla TS: pointerId), a mysz i klawisz po rodzaju, bo ich InputObject może być inny.
@@ -467,6 +579,7 @@ local function updateView()
 	fireButton.Active = shown
 	if not shown then
 		stopHold()
+		setAim(nil)
 	end
 	statusGroup.Visible = Session.phase ~= "results"
 	watchLabel.Visible = eliminated and Session.phase == "racing"
@@ -474,9 +587,7 @@ end
 
 local function resetRound()
 	eliminated = false
-	readyAt = 0
-	cooldownCover.BackgroundTransparency = 1
-	winnerLabel.Visible = false
+	setTank(1)
 	setHealth(MAX_HEALTH)
 	stopAllJets()
 	updateView()
@@ -488,21 +599,53 @@ local function onHealth(health: any)
 	end
 end
 
+-- Wspólne dla trafienia i odepchnięcia: ta sama droga co uderzenie w skałę, KayakController odda to rozbryzgowi, dźwiękowi
+-- i drżeniu kamery. Throttle jak w TS: najwyżej raz na HIT_FEEL_GAP, bo strumień trafia wiele razy na sekundę.
+local function feelHit()
+	local now = os.clock()
+	if now < feelAt then
+		return
+	end
+	feelAt = now + HIT_FEEL_GAP
+	local state = Session.state
+	if state then
+		state.lastHit = math.max(state.lastHit, Config.HIT_FULL_STRENGTH * 0.35)
+	end
+	flashScreen()
+end
+
 local function onHit(shooterId: any, targetId: any)
 	local from = hullOf(shooterId)
 	local to = if targetId ~= nil then hullOf(targetId) else nil
 	if from then
-		playJet(from, to)
+		showJet(from, to)
 	end
-	if targetId == nil and shooterId == ownId then
-		showToast(Texts.noTarget, TOAST_TIME)
-	elseif targetId == ownId then
-		local state = Session.state
-		if state then
-			-- Ta sama droga co uderzenie w skałę: KayakController odda to rozbryzgowi, dźwiękowi i drżeniu kamery.
-			state.lastHit = math.max(state.lastHit, Config.HIT_FULL_STRENGTH * 0.35)
-		end
-		flashScreen()
+	if to then
+		burst(to.Position, HIT_SPRAY)
+	end
+	if targetId == ownId then
+		feelHit()
+	end
+end
+
+local function onTank(value: any)
+	if type(value) == "number" then
+		setTank(value)
+	end
+end
+
+-- Odepchnięcie ofiary: serwer podaje zmianę prędkości, a fizykę własnego kajaka liczy to urządzenie.
+-- Po odpadnięciu i poza walką (Session.active = false) nie ma czego pchać.
+local function onPush(dx: any, dz: any)
+	local state = Session.state
+	if type(dx) ~= "number" or type(dz) ~= "number" or state == nil or not Session.active then
+		return
+	end
+	state.velocity += Vector2.new(dx, dz)
+	feelHit()
+	local hull = Session.ownHull
+	if hull then
+		burst(hull.Position, PUSH_SPRAY)
 	end
 end
 
@@ -518,20 +661,6 @@ local function onOut(userId: any, name: any, place: any)
 		updateView()
 	else
 		showToast(string.format(Texts.outOther, tostring(name)), TOAST_TIME)
-	end
-end
-
--- Zwycięzca to pierwszy wiersz wyników. Napis ponad panelem wyników z HudController.
-local function onResults(rows: any)
-	if type(rows) ~= "table" then
-		return
-	end
-	for index, row in rows do
-		if type(row) == "table" and (row.place or index) == 1 then
-			winnerLabel.Text = if row.userId == ownId then Texts.winnerSelf else string.format(Texts.winner, tostring(row.name))
-			winnerLabel.Visible = true
-			return
-		end
 	end
 end
 
@@ -573,9 +702,6 @@ local function buildMessages()
 
 	local watchBox = group("Watching", Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -14), UDim2.fromOffset(460, 28))
 	watchLabel = label({ Size = UDim2.fromScale(1, 1), TextSize = 19, Text = Texts.watching, Visible = false }, watchBox)
-
-	local winnerBox = group("Winner", Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 2), UDim2.fromOffset(560, 28))
-	winnerLabel = label({ Size = UDim2.fromScale(1, 1), TextSize = 24, TextColor3 = ACCENT_COLOR, Visible = false }, winnerBox)
 end
 
 local function buildButton()
@@ -593,16 +719,32 @@ local function buildButton()
 	}, gui)
 	table.insert(scales, make("UIScale", {}, fireButton))
 	corner(fireButton, UDim.new(0.5, 0))
-	make("UIStroke", { Color = WATER_COLOR, Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, fireButton)
+	fireStroke = make("UIStroke", { Color = WATER_COLOR, Thickness = 4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, fireButton)
 
 	local inner = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, fireButton)
 	pressScale = make("UIScale", {}, inner)
 	label({ Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 58), TextSize = 50, TextStrokeTransparency = 1, Text = Texts.fireIcon }, inner)
-	label({ Position = UDim2.fromOffset(8, 78), Size = UDim2.new(1, -16, 0, 24), TextScaled = true, TextColor3 = WATER_COLOR, TextStrokeTransparency = 1, Text = Texts.fire }, inner)
-	cooldownCover = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1 }, inner)
-	corner(cooldownCover, UDim.new(0.5, 0))
+	-- Kolejność rysowania (dla TS: z-index po kolejności w DOM): ikona, przyciemnienie, podpis, żeby „PUSTO” zostało jasne.
+	emptyCover = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, Visible = false }, inner)
+	corner(emptyCover, UDim.new(0.5, 0))
+	fireCaption = label({ Position = UDim2.fromOffset(8, 78), Size = UDim2.new(1, -16, 0, 24), TextScaled = true, TextColor3 = WATER_COLOR, TextStrokeTransparency = 1, Text = Texts.fire }, inner)
+
+	-- Zbiornik pod przyciskiem: nie jest Active, więc dotyk w pasek idzie do wiosła jak w resztę HUD-u.
+	local tankTrack = make("Frame", {
+		Name = "Tank",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, TANK_BAR_GAP),
+		Size = UDim2.new(1, 0, 0, TANK_BAR_HEIGHT),
+		BackgroundColor3 = TRACK_COLOR,
+		BackgroundTransparency = 0.25,
+	}, fireButton)
+	corner(tankTrack, UDim.new(0, TANK_BAR_HEIGHT // 2))
+	tankFill = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WATER_COLOR }, tankTrack)
+	corner(tankFill, UDim.new(0, TANK_BAR_HEIGHT // 2))
 
 	-- Nie Activated: ono przychodzi dopiero po puszczeniu, a tu liczy się moment wciśnięcia i trzymanie.
+	-- Przycisk jest Active, więc PaddleInput dostaje ten dotyk jako processed i pomija go, a drugi palec na wodzie to osobny
+	-- InputObject (dla TS: inny pointerId) i wiosłuje normalnie.
 	fireButton.InputBegan:Connect(function(input: InputObject)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 			beginHold(input)
@@ -615,7 +757,7 @@ local function buildInterface()
 		Name = "Arena",
 		IgnoreGuiInset = true,
 		ResetOnSpawn = false,
-		DisplayOrder = 6, -- nad HUD-em: napis o zwycięzcy stoi nad panelem wyników, a reszta jest wtedy ukryta
+		DisplayOrder = 6, -- nad HUD-em; przy wynikach status, przycisk i komunikaty są ukryte, więc nic nie nachodzi na panel
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}, nil)
 	flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = WATER_COLOR, BackgroundTransparency = 1, Visible = false }, gui)
@@ -648,6 +790,26 @@ local function buildJet(anchor: BasePart): Jet
 	beam.Enabled = false
 	beam.Parent = anchor
 	return { beam = beam, start = start, finish = finish, from = nil, to = nil, endsAt = 0 }
+end
+
+-- Mały romb nad celem, widoczny przez wszystko, jak znacznik w LakeTutorial. Adornee przestawia się na kadłub celu.
+local function buildAimMarker()
+	aimMarker = make("BillboardGui", {
+		Name = "ArenaAim",
+		AlwaysOnTop = true,
+		Size = UDim2.fromOffset(22, 22),
+		StudsOffsetWorldSpace = Vector3.new(0, AIM_HEIGHT, 0),
+		Enabled = false,
+	}, nil)
+	local shape = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.7, 0.7),
+		Rotation = 45,
+		BackgroundColor3 = ACCENT_COLOR,
+	}, aimMarker)
+	make("UIStroke", { Color = PANEL_COLOR, Thickness = 2 }, shape)
+	aimMarker.Parent = player:WaitForChild("PlayerGui")
 end
 
 local function buildRing()
@@ -692,6 +854,7 @@ local function buildWorld()
 		jets[i] = buildJet(anchor)
 	end
 	buildRing()
+	buildAimMarker()
 end
 
 local function onArenaState()
@@ -703,10 +866,12 @@ end
 local function onPhase(phase: string)
 	if phase == "countdown" then
 		resetRound()
+	elseif phase == "results" then
+		hideToast()
 	end
 	updateView()
 	if phase == "racing" then
-		startZoneTicks()
+		startRoundTicks()
 	end
 end
 
@@ -735,7 +900,8 @@ local function activate()
 	Remotes.get("ArenaHealth").OnClientEvent:Connect(onHealth)
 	Remotes.get("ArenaHit").OnClientEvent:Connect(onHit)
 	Remotes.get("ArenaOut").OnClientEvent:Connect(onOut)
-	Remotes.get("ArenaResults").OnClientEvent:Connect(onResults)
+	Remotes.get("ArenaTank").OnClientEvent:Connect(onTank)
+	Remotes.get("ArenaPush").OnClientEvent:Connect(onPush)
 
 	Session.on("arenaState", onArenaState)
 	Session.on("phase", onPhase)
