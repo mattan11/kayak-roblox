@@ -290,22 +290,21 @@ local Config = {
 	BATTLE_BOOST_TIME = 3,
 	BATTLE_MAX_SPEED = 75, -- limit anty-oszustwo w Bitwie: boost daje więcej niż wyścig
 	BATTLE_BOOST_THRUST = 1.6, -- mnożnik ciągu wiosłowania w czasie boostu (klient, KayakPhysics)
-	BATTLE_STUN_TIME = 2, -- bez wiosłowania, kajak płynie z prądem
+	BATTLE_STUN_TIME = 2.5, -- bez wiosłowania, kajak płynie z prądem
 	BATTLE_PROTECT_TIME = 4, -- ochrona po końcu ogłuszenia
-	BATTLE_SPLASH_RANGE = 14,
-	BATTLE_SPLASH_ARC_COS = -0.2, -- wiosło sięga przed dziób i na boki, ale nie za plecy (cos kąta od dziobu)
 	BATTLE_CANNON_RANGE = 60,
 	BATTLE_CANNON_ARC_COS = 0.7, -- stożek przed dziobem: około 45° w każdą stronę
 	BATTLE_BEND_SLACK = 1.5, -- cel najdalej zasięg × tyle wzdłuż rzeki: nie strzelamy przez brzeg do sąsiedniego zakola
 	BATTLE_NET_BEHIND = 9, -- siatka powstaje tyle za środkiem kajaka
 	BATTLE_NET_RADIUS = 5, -- kto wpłynie tak blisko, wpadł w siatkę
 	BATTLE_NET_LIFETIME = 20, -- nietrafiona siatka znika po tylu s
-	-- Wagi losowania: front = prowadzący, back = ostatni; miejsca pomiędzy mają wagi pośrednie. Kolejność i lista: BattleRules.ITEMS.
+	BATTLE_NET_SLOW_TIME = 4, -- siatka spowalnia tyle s, licząc od trafienia (czyli dłużej niż ogłuszenie)
+	BATTLE_NET_SLOW = 0.4, -- ułamek prędkości, także z prądu, w czasie spowolnienia
+	-- Wagi losowania skrzynki „?”: front = prowadzący, back = ostatni; miejsca pomiędzy mają wagi pośrednie. Kolejność i lista: BattleRules.ITEMS.
 	BATTLE_ITEM_WEIGHTS = {
 		boost = { front = 2, back = 4 },
 		shield = { front = 4, back = 2 },
 		net = { front = 4, back = 1 },
-		splash = { front = 2, back = 3 },
 		cannon = { front = 0, back = 5 },
 	},
 

@@ -9,8 +9,9 @@ local Config = require(script.Parent.Config)
 
 local BattleRules = {}
 
-export type Item = "boost" | "shield" | "net" | "splash" | "cannon"
-export type Crate = { index: number, position: Vector2, s: number }
+export type Item = "boost" | "shield" | "net" | "cannon"
+export type CrateKind = Item | "mystery" -- "mystery" = skrzynka „?”, przedmiot losowany przy zebraniu
+export type Crate = { index: number, position: Vector2, s: number, kind: CrateKind }
 export type Net = { id: number, ownerId: number, position: Vector2, expiresAt: number }
 export type Fighter = {
 	position: Vector2,
@@ -19,7 +20,7 @@ export type Fighter = {
 	finished: boolean, -- na mecie: nie atakuje, nie zbiera i nie jest celem, ale liczy się do miejsc
 }
 export type Holder = { item: Item?, shield: boolean, protectedUntil: number, readyAt: number }
-export type Effect = { id: number, kind: "stun" | "boost" | "shieldHit", time: number }
+export type Effect = { id: number, kind: "stun" | "slow" | "boost" | "shieldHit", time: number }
 export type Outcome = { item: Item, effects: { Effect }, net: Net? }
 export type Pickup = { id: number, index: number, item: Item }
 export type Sweep = { removed: { Net }, effects: { Effect } }
@@ -32,7 +33,7 @@ export type State = {
 }
 
 -- Kolejność ma znaczenie: to na tej liście opiera się losowanie, a tabela w Luau nie ma gwarantowanej kolejności kluczy.
-BattleRules.ITEMS = { "boost", "shield", "net", "splash", "cannon" } :: { Item }
+BattleRules.ITEMS = { "boost", "shield", "net", "cannon" } :: { Item }
 
 -- Skrzynki ---------------------------------------------------------------------------------------------------------------
 
@@ -54,20 +55,30 @@ local function nearRock(river: any, position: Vector2): boolean
 	return false
 end
 
--- Skrzynki na trasie: rzędy po 3 w poprzek. Zależy tylko od rzeki i Config, więc serwer i klient mają te same numery.
--- Skała wycina pojedynczą skrzynkę, a wodospad cały rząd.
+-- Skrzynki na trasie: rzędy po 3 w poprzek. Zależy tylko od rzeki i Config, więc serwer i klient mają te same numery i te same ikony.
+-- Skała wycina pojedynczą skrzynkę, a wodospad cały rząd. W każdym rzędzie jedna skrzynka to „?”, na kolejnym torze niż w poprzednim
+-- rzędzie, a dwie pokazują przedmioty z ITEMS po kolei: gracz wybiera sterowaniem, co bierze.
 function BattleRules.crates(river: any): { Crate }
 	local list: { Crate } = {}
 	local last = river.length - Config.FINISH_MARGIN - Config.BATTLE_CRATE_FINISH_CLEAR
 	local s = Config.START_LINE + Config.BATTLE_CRATE_START
+	local row = 0
+	local shown = 0 -- ile przedmiotów rozdano na ikony
 	while s <= last do
 		if not nearFall(river, s) then
 			local center = river:pointAt(s)
 			local q = river:query(center)
+			local mysteryLane = row % 3 - 1
+			row += 1
 			for lane = -1, 1 do
+				local kind: CrateKind = "mystery"
+				if lane ~= mysteryLane then
+					kind = BattleRules.ITEMS[shown % #BattleRules.ITEMS + 1]
+					shown += 1
+				end
 				local position = center + q.normal * (lane * Config.BATTLE_CRATE_LANE * q.halfWidth)
 				if not nearRock(river, position) then
-					table.insert(list, { index = #list + 1, position = position, s = s })
+					table.insert(list, { index = #list + 1, position = position, s = s, kind = kind })
 				end
 			end
 		end
@@ -153,7 +164,8 @@ function BattleRules.rollItem(rank: number, count: number, random: () -> number)
 	return BattleRules.ITEMS[#BattleRules.ITEMS] -- błąd zaokrąglenia przy samej górze zakresu
 end
 
--- Kto przepływa teraz przez skrzynkę. Gracz z przedmiotem jej nie zabiera. Wynik: lista do wysłania jako BattleItem i BattleCrate.
+-- Kto przepływa teraz przez skrzynkę. Zebranie zastępuje trzymany przedmiot, więc niechciany wymienia się na inny albo dowolną „?”.
+-- Skrzynka z tym, co gracz już ma, zostaje dla innych. Wynik: lista do wysłania jako BattleItem i BattleCrate.
 function BattleRules.collect(state: State, fighters: { [number]: Fighter }, now: number, random: () -> number): { Pickup }
 	local pickups: { Pickup } = {}
 	local ranks = BattleRules.ranks(fighters)
@@ -161,15 +173,16 @@ function BattleRules.collect(state: State, fighters: { [number]: Fighter }, now:
 	for _, id in sortedIds(fighters) do
 		local fighter = fighters[id]
 		local holder = holderOf(state, id)
-		if not fighter.finished and holder.item == nil then
+		if not fighter.finished then
 			for _, crate in state.crates do
 				-- Najpierw tanie porównanie wzdłuż rzeki: 8 graczy × ok. 90 skrzynek × 10 razy na sekundę.
 				if
 					math.abs(crate.s - fighter.s) <= Config.BATTLE_CRATE_RADIUS * 2
 					and state.respawnAt[crate.index] == nil
+					and crate.kind ~= holder.item
 					and (crate.position - fighter.position).Magnitude <= Config.BATTLE_CRATE_RADIUS
 				then
-					local item = BattleRules.rollItem(ranks[id], count, random)
+					local item: Item = if crate.kind == "mystery" then BattleRules.rollItem(ranks[id], count, random) else crate.kind
 					holder.item = item
 					state.respawnAt[crate.index] = now + Config.BATTLE_CRATE_RESPAWN
 					table.insert(pickups, { id = id, index = crate.index, item = item })
@@ -198,22 +211,14 @@ end
 
 -- Ataki ---------------------------------------------------------------------------------------------------------------------
 
--- Zasięg i szerokość łuku ataku. Inne przedmioty nie celują.
-local function arcOf(item: Item): (number, number)
-	if item == "splash" then
-		return Config.BATTLE_SPLASH_RANGE, Config.BATTLE_SPLASH_ARC_COS
-	end
-	return Config.BATTLE_CANNON_RANGE, Config.BATTLE_CANNON_ARC_COS
-end
-
--- Najbliższy cel ataku albo nil. Pomija siebie, graczy na mecie i chronionych (atak przeszedłby na marne), a tarcza nie chroni
+-- Najbliższy cel armatki albo nil. Pomija siebie, graczy na mecie i chronionych (atak przeszedłby na marne), a tarcza nie chroni
 -- przed wyborem: zdejmuje ją dopiero trafienie. Warunek `s` odrzuca kajak z sąsiedniego zakola: blisko w linii prostej, ale za brzegiem.
-function BattleRules.pickTarget(state: State, item: Item, attackerId: number, fighters: { [number]: Fighter }, now: number): number?
+function BattleRules.pickTarget(state: State, attackerId: number, fighters: { [number]: Fighter }, now: number): number?
 	local attacker = fighters[attackerId]
 	if attacker == nil then
 		return nil
 	end
-	local range, arc = arcOf(item)
+	local range, arc = Config.BATTLE_CANNON_RANGE, Config.BATTLE_CANNON_ARC_COS
 	local bestId: number? = nil
 	local bestDistance = math.huge
 	for _, id in sortedIds(fighters) do
@@ -275,7 +280,7 @@ function BattleRules.use(state: State, id: number, fighters: { [number]: Fighter
 		table.insert(state.nets, net)
 		outcome.net = net
 	else
-		local target = BattleRules.pickTarget(state, item, id, fighters, now)
+		local target = BattleRules.pickTarget(state, id, fighters, now)
 		if target == nil then
 			return nil
 		end
@@ -290,6 +295,7 @@ function BattleRules.use(state: State, id: number, fighters: { [number]: Fighter
 end
 
 -- Obieg siatek: każda znika po czasie albo po pierwszym trafieniu. Właściciel, gracz na mecie i chroniony przepływają bez skutku.
+-- Ogłuszenie z siatki niesie też spowolnienie; tarcza zatrzymuje oba.
 function BattleRules.sweepNets(state: State, fighters: { [number]: Fighter }, now: number): Sweep
 	local sweep: Sweep = { removed = {}, effects = {} }
 	local ids = sortedIds(fighters)
@@ -307,6 +313,9 @@ function BattleRules.sweepNets(state: State, fighters: { [number]: Fighter }, no
 					local effect = BattleRules.hit(state, id, now)
 					if effect then
 						table.insert(sweep.effects, effect)
+						if effect.kind == "stun" then
+							table.insert(sweep.effects, { id = id, kind = "slow", time = Config.BATTLE_NET_SLOW_TIME })
+						end
 					end
 					gone = true
 					break

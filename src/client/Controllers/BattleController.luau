@@ -1,7 +1,7 @@
 -- Tryb Bitwa po stronie klienta (ARCHITECTURE.md, sekcja „Tryb Bitwa”): skrzynki, siatki, przycisk przedmiotu i widać skutki.
 -- Działa tylko, gdy workspace.RaceMode == "battle"; w zwykłym wyścigu nie tworzy niczego i nie ma żadnych połączeń.
 -- Klient tylko rysuje i prosi o użycie przedmiotu (BattleUse). Decyzje podejmuje serwer, a tu zapisujemy jedynie
--- state.stunUntil i state.boostUntil, gdy przyjdzie BattleEffect.
+-- state.stunUntil, state.boostUntil i state.slowUntil, gdy przyjdzie BattleEffect.
 --
 -- Telefon: wszystko to gotowe pule (dla TS: object pool jak w WaterEffects). Najwięcej 15 części naraz: 6 skrzynek,
 -- 3 siatki, 3 tarcze, 2 kotwice kilwatera i 1 kotwica efektów. Nieużywana część nie ma rodzica, więc nic nie kosztuje.
@@ -27,6 +27,7 @@ local BattleController = {}
 
 local WATER_COLOR = Color3.fromRGB(70, 190, 225) -- sygnał ogłuszenia i tarczy: woda, bez czerwieni
 local CRATE_COLOR = Color3.fromRGB(255, 196, 70)
+local ITEM_CRATE_COLOR = Color3.fromRGB(245, 248, 250) -- skrzynka z ikoną: inna niż żółta „?”
 local NET_COLOR = Color3.fromRGB(255, 140, 50)
 local TEXT_COLOR = Color3.fromRGB(245, 248, 250)
 local PANEL_COLOR = Color3.fromRGB(16, 34, 48)
@@ -61,8 +62,8 @@ local FLASH_TRANSPARENCY = 0.72
 local SHIELD_ATTRIBUTE = "BattleShield" -- atrybut kajaka, ustawia BattleService
 local KEYS = { [Enum.KeyCode.F] = true, [Enum.KeyCode.ButtonX] = true }
 
-type Crate = { index: number, x: number, y: number, z: number, s: number, taken: boolean, slot: CrateSlot? }
-type CrateSlot = { part: BasePart, crate: Crate? }
+type Crate = { index: number, x: number, y: number, z: number, s: number, kind: string, taken: boolean, slot: CrateSlot? }
+type CrateSlot = { part: BasePart, mark: TextLabel, crate: Crate? }
 type NetSlot = { part: BasePart, id: number? }
 type Aura = { attach: (BasePart) -> (), detach: () -> (), model: Model?, token: number }
 
@@ -380,19 +381,6 @@ local function playCannon(from: BasePart, to: BasePart?)
 	ensureFrame()
 end
 
-local function playSplash(from: BasePart, to: BasePart?)
-	local target = if to then to.Position else from.Position + from.CFrame.LookVector * 6
-	burst(target, 30)
-end
-
-local function playAttack(kind: string, from: BasePart, to: BasePart?)
-	if kind == "cannon" then
-		playCannon(from, to)
-	else
-		playSplash(from, to)
-	end
-end
-
 -- Skrzynki i siatki ---------------------------------------------------------------------------------------------------------
 
 local function releaseCrate(crate: Crate)
@@ -409,6 +397,9 @@ local function assignCrate(crate: Crate)
 		if slot.crate == nil then
 			slot.crate = crate
 			crate.slot = slot
+			local shown = Texts.battle.items[crate.kind]
+			slot.mark.Text = if shown then shown.icon else Texts.battle.crateMark
+			slot.part.Color = if shown then ITEM_CRATE_COLOR else CRATE_COLOR
 			slot.part.CFrame = CFrame.new(crate.x, crate.y, crate.z)
 			slot.part.Parent = folder
 			ensureFrame()
@@ -521,7 +512,7 @@ end
 local function buildCrateSlot(): CrateSlot
 	local part = newPart(Vector3.one * CRATE_SIZE, CRATE_COLOR)
 	local board = Instance.new("BillboardGui")
-	board.Size = UDim2.fromOffset(40, 40)
+	board.Size = UDim2.fromOffset(54, 54)
 	board.StudsOffset = Vector3.new(0, CRATE_SIZE, 0)
 	board.MaxDistance = CRATE_VIEW_AHEAD
 	board.Parent = part
@@ -532,9 +523,9 @@ local function buildCrateSlot(): CrateSlot
 	mark.Text = Texts.battle.crateMark
 	mark.TextColor3 = TEXT_COLOR
 	mark.TextStrokeTransparency = 0.2
-	mark.TextSize = 30
+	mark.TextSize = 42
 	mark.Parent = board
-	return { part = part, crate = nil }
+	return { part = part, mark = mark, crate = nil }
 end
 
 -- Dane z BattleRules, te same numery co na serwerze. Moduł wczytujemy tutaj: w zwykłym wyścigu nie liczymy skrzynek wcale.
@@ -557,6 +548,7 @@ local function loadCrates()
 			y = q.level + CRATE_FLOAT,
 			z = entry.position.Y,
 			s = entry.s,
+			kind = entry.kind,
 			taken = false,
 			slot = nil,
 		}
@@ -637,9 +629,7 @@ end
 local function onConsumed(used: string)
 	local hull = Session.ownHull
 	if hull and used == "cannon" then
-		playAttack(used, hull, nearestAhead(hull, Config.BATTLE_CANNON_RANGE, Config.BATTLE_CANNON_ARC_COS))
-	elseif hull and used == "splash" then
-		playAttack(used, hull, nearestAhead(hull, Config.BATTLE_SPLASH_RANGE, Config.BATTLE_SPLASH_ARC_COS))
+		playCannon(hull, nearestAhead(hull, Config.BATTLE_CANNON_RANGE, Config.BATTLE_CANNON_ARC_COS))
 	end
 end
 
@@ -664,7 +654,7 @@ local function checkPending()
 	local used = pendingItem
 	if used and os.clock() - pendingAt >= USE_ANSWER_TIME then
 		pendingItem = nil
-		if used == "cannon" or used == "splash" then
+		if used == "cannon" then
 			showToast(Texts.battle.noTarget)
 		end
 	end
@@ -680,6 +670,15 @@ local function onStun(duration: number)
 	showAura(stars, Session.ownModel, duration)
 	showToast(Texts.battle.stunned)
 	flashScreen(duration)
+end
+
+-- Przychodzi zaraz po ogłuszeniu z siatki, więc napis zastępuje „Ogłuszony!”.
+local function onSlow(duration: number)
+	local state = Session.state
+	if state then
+		state.slowUntil = math.max(state.slowUntil, os.clock() + duration)
+	end
+	showToast(Texts.battle.netted)
 end
 
 local function onBoost(duration: number)
@@ -701,7 +700,7 @@ local function onShieldHit()
 end
 
 -- Cudze skutki, czyli BattleEffect("seen", what, userId, extra) do wszystkich. Własne przychodzą zwykłą drogą, więc tu je pomijamy.
--- Ataki: what = "cannon" | "splash", extra = userId celu lub nil. Stany: what = "stun" | "boost", extra = czas.
+-- Atak: what = "cannon", extra = userId celu lub nil. Stany: what = "stun" | "boost", extra = czas.
 -- Bez tego wydarzenia gra działa, tylko gracz nie widzi skutków na cudzych kajakach.
 local function onForeign(what: any, userId: any, extra: any)
 	if userId == ownId then
@@ -711,11 +710,11 @@ local function onForeign(what: any, userId: any, extra: any)
 	if model == nil then
 		return
 	end
-	if what == "cannon" or what == "splash" then
+	if what == "cannon" then
 		local hull = model.PrimaryPart
 		local target = if type(extra) == "number" then modelOf(extra) else nil
 		if hull then
-			playAttack(what, hull, target and target.PrimaryPart)
+			playCannon(hull, target and target.PrimaryPart)
 		end
 	else
 		local pool = if what == "stun" then stars elseif what == "boost" then trails else nil
@@ -732,6 +731,8 @@ local function onEffect(kind: any, a: any, b: any, c: any)
 	end
 	if kind == "stun" and type(a) == "number" then
 		onStun(a)
+	elseif kind == "slow" and type(a) == "number" then
+		onSlow(a)
 	elseif kind == "boost" and type(a) == "number" then
 		onBoost(a)
 	elseif kind == "shieldHit" then

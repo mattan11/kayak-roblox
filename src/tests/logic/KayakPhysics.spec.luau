@@ -211,6 +211,16 @@ return function(t)
 			t.expect(progress(boosted)).toBeGreaterThan(progress(normal) + 2)
 			t.expect(progress(expired)).toBe(progress(normal))
 		end)
+		t.it("spowolnienie z siatki hamuje też spływ z prądem, tylko gdy trwa", function()
+			local slowed, normal, expired = start(), start(), start()
+			slowed.slowUntil = os.clock() + 60
+			expired.slowUntil = os.clock() - 1
+			for _, state in { slowed, normal, expired } do
+				run(state, 4)
+			end
+			t.expect(progress(slowed)).toBeLessThan(progress(normal) - 2)
+			t.expect(progress(expired)).toBe(progress(normal))
+		end)
 		t.it("wynik nie zależy od FPS", function()
 			local a, b = start(), start()
 			for _ = 1, 120 do

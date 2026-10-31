@@ -44,10 +44,10 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
   kilku trasach, czy są ciekawe, a nie tylko przejezdne.
 - **Rotacja stałych rzek** dopiero przy większej liczbie graczy: w wiosce np. 3 aktywne, rankingi zostają.
 - **Tryb „Bitwa” (osobny, po podstawowym wyścigu):** ta sama rzeka, ale po drodze pływające skrzynki z przedmiotami.
-  Osobny pomost i kolejka. Pomysły: siatka zostawiona na wodzie (zatrzymuje na parę sekund), uderzenie wiosłem z bliska
-  (ogłuszenie: kilka sekund bez wiosłowania, kajak płynie z prądem), przyspieszenie na plecach fali, tarcza przed jednym atakiem.
+  Osobny pomost i kolejka. Przedmioty (4, decyzja Marka 2026-10-31): siatka na wodzie (ogłuszenie i mocne
+  spowolnienie), armatka wodna, przyspieszenie, tarcza. Skrzynki pokazują ikony, gracz celuje w tę, którą chce, a co trzecia to niespodzianka „?”.
   - Bez wpływu na rekordy, medale i rankingi: czasy z tego trybu są osobne albo wcale.
-  - Słabsi w wyścigu dostają lepsze przedmioty, a ogłuszony ma chwilę ochrony przed kolejnym atakiem.
+  - Słabsi w wyścigu dostają lepsze przedmioty ze skrzynek „?”, a ogłuszony ma chwilę ochrony przed kolejnym atakiem.
   - Przedmioty rozstrzyga serwer: klient prosi o użycie, serwer sprawdza posiadanie, zasięg i czas odnowienia, a dopiero
     potem wysyła skutek do kajaka ofiary (fizykę liczy jej urządzenie).
   - Skrzynki to dane rzeki, więc tryb działa na każdej trasie.

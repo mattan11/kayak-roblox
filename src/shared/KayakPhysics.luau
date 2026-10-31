@@ -2,7 +2,7 @@
 -- potrzebuje do jazdy. Pozycja = Vector2(x, z), kurs w radianach: przód = (cos, sin), rosnący kurs = skręt w prawo.
 -- Prędkości liczymy WZGLĘDEM WODY: opór i ster działają tylko wtedy, gdy kajak porusza się inaczej niż nurt.
 -- side: -1 = lewa strona, 1 = prawa.
--- Tryb Bitwa: stunUntil i boostUntil to chwile z os.clock() tego urządzenia, ustawia je BattleController po BattleEffect.
+-- Tryb Bitwa: stunUntil, boostUntil i slowUntil to chwile z os.clock() tego urządzenia, ustawia je BattleController po BattleEffect.
 -- W wyścigu oba zostają 0, więc nic nie zmieniają.
 
 local Config = require(script.Parent.Config)
@@ -29,6 +29,7 @@ export type State = {
 	strokes: number, -- licznik rozpoczętych machnięć
 	stunUntil: number, -- do tej chwili (os.clock) bez machnięć i wbicia, kajak niesie prąd
 	boostUntil: number, -- do tej chwili (os.clock) ciąg × Config.BATTLE_BOOST_THRUST
+	slowUntil: number, -- do tej chwili (os.clock) ruch × Config.BATTLE_NET_SLOW, także z prądem
 }
 
 function KayakPhysics.new(position: Vector2, heading: number): State
@@ -50,6 +51,7 @@ function KayakPhysics.new(position: Vector2, heading: number): State
 		strokes = 0,
 		stunUntil = 0,
 		boostUntil = 0,
+		slowUntil = 0,
 	}
 end
 
@@ -199,7 +201,9 @@ local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: num
 	state.velocity += (forward * (thrust - forwardSpeed * dragForward) - right * (sideSpeed * Config.DRAG_LATERAL)) * dt
 	state.spin += (torque - state.spin * Config.DRAG_ANGULAR) * dt
 	state.heading = wrapAngle(state.heading + state.spin * dt)
-	state.position += state.velocity * dt
+	-- Siatka hamuje sam ruch, nie prędkość: po wyplątaniu kajak płynie dalej bez rozpędzania się od zera
+	local slow = if now < state.slowUntil then Config.BATTLE_NET_SLOW else 1
+	state.position += state.velocity * slow * dt
 
 	collide(state, river, others)
 

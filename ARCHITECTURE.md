@@ -121,17 +121,16 @@ Ta sama rzeka co wyścig, ale po drodze skrzynki z przedmiotami. Bez wpływu na 
 
 - **Wybór:** w oknie rzek przełącznik „Wyścig” / „Bitwa”. `QueueAction("join", river, mode)`, `mode` = `"race"` | `"battle"`. Kolejki są osobne: klucz biletów to rzeka i tryb. `QueueState` niesie `(river, count, endsAt, ready, mode)`.
 - **Wpis `Races`:** `{ river, expected, mode }`. Serwer spływu ustawia atrybut `workspace.RaceMode`, brak wpisu = `"race"`. W Studio: `Config.ACTIVE_MODE`.
-- **Skrzynki:** `BattleRules.crates(river)`: co `BATTLE_CRATE_SPACING` studs wzdłuż rzeki, po 3 w poprzek, z dala od skał i wodospadów. Serwer sprawdza zebranie po pozycji `Hull` i odnawia skrzynkę po `BATTLE_CRATE_RESPAWN` s. Klient rysuje je z tych samych danych; `workspace.Crates` nie istnieje, stan zebrania idzie przez `BattleCrate(index, available)`.
-- **Przedmioty:** jeden naraz, losowane przez serwer, tym lepsze, im dalej od prowadzącego:
+- **Skrzynki:** `BattleRules.crates(river)`: co `BATTLE_CRATE_SPACING` studs wzdłuż rzeki, po 3 w poprzek, z dala od skał i wodospadów. W rzędzie dwie skrzynki pokazują ikonę przedmiotu, a jedna to „?”. Serwer sprawdza zebranie po pozycji `Hull` i odnawia skrzynkę po `BATTLE_CRATE_RESPAWN` s. Klient rysuje je z tych samych danych; `workspace.Crates` nie istnieje, stan zebrania idzie przez `BattleCrate(index, available)`.
+- **Przedmioty:** jeden naraz. Gracz celuje w wybraną skrzynkę, a wpłynięcie w inną wymienia przedmiot (skrzynka z tym samym zostaje). Skrzynkę „?” losuje serwer, tym lepiej, im dalej od prowadzącego:
   - `boost`: 3 s mocniejszego ciągu,
   - `shield`: blokuje jeden atak,
-  - `net`: siatka na wodzie za kajakiem, zatrzymuje pierwszego, kto w nią wpłynie,
-  - `splash`: uderzenie wiosłem, najbliższy gracz w zasięgu 14 studs przed lub obok,
+  - `net`: siatka na wodzie za kajakiem, pierwszego, kto w nią wpłynie, ogłusza i na 4 s spowalnia do 40% prędkości, także z prądu,
   - `cannon`: armatka wodna, automatycznie w najbliższego gracza w stożku przed dziobem, zasięg 60 studs.
-- **Skutki:** `stun`: 2 s bez wiosłowania, kajak płynie z prądem, potem 4 s ochrony. Kajak zawsze dalej się porusza i nikt nie wypada z wyścigu.
+- **Skutki:** `stun`: 2,5 s bez wiosłowania, kajak płynie z prądem, potem 4 s ochrony. Kajak zawsze dalej się porusza i nikt nie wypada z wyścigu.
 - **Serwer decyduje:** klient wysyła `BattleUse()`. Serwer sprawdza posiadanie, czas odnowienia i zasięg z pozycji `Hull`, a potem wysyła skutek do ofiary. Fizykę liczy urządzenie gracza.
-- **Zdarzenia `Remotes`:** `BattleUse` (klient → serwer), `BattleItem` (serwer → gracz: id przedmiotu lub nil), `BattleEffect` (serwer → gracz: `"stun"` | `"boost"` | `"shieldHit"`, czas), `BattleCrate` (serwer → wszyscy), `BattleWorld` (serwer → wszyscy: `"net"`, x, z, id, aktywna).
-- **Fizyka:** `KayakPhysics` dostaje `state.stunUntil`, `state.boostUntil` (czas z `os.clock` klienta) i nic poza tym. Bez wpływu w trybie wyścigu.
+- **Zdarzenia `Remotes`:** `BattleUse` (klient → serwer), `BattleItem` (serwer → gracz: id przedmiotu lub nil), `BattleEffect` (serwer → gracz: `"stun"` | `"slow"` | `"boost"` | `"shieldHit"`, czas), `BattleCrate` (serwer → wszyscy), `BattleWorld` (serwer → wszyscy: `"net"`, x, z, id, aktywna).
+- **Fizyka:** `KayakPhysics` dostaje `state.stunUntil`, `state.boostUntil`, `state.slowUntil` (czas z `os.clock` klienta) i nic poza tym. Bez wpływu w trybie wyścigu.
 - **Liczby:** `Config`, sekcja `-- Bitwa`.
 
 ## Strefy na jeziorze i Wodna bitwa (kontrakt z 2026-10-31)

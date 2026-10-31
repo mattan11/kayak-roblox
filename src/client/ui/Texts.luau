@@ -48,6 +48,7 @@ return {
 	-- Tryb Bitwa. Ikony to zwykłe znaki, bez wgrywanych obrazków. Klucze items = BattleRules.ITEMS.
 	battle = {
 		stunned = "Ogłuszony!",
+		netted = "W siatce!",
 		boost = "Przyspieszenie!",
 		shieldHit = "Tarcza zatrzymała atak!",
 		noTarget = "Nikogo w zasięgu",
@@ -57,7 +58,6 @@ return {
 			boost = { icon = "⚡", name = "Przyspieszenie" },
 			shield = { icon = "🛡", name = "Tarcza" },
 			net = { icon = "🕸", name = "Siatka" },
-			splash = { icon = "💦", name = "Wiosło" },
 			cannon = { icon = "🌊", name = "Armatka" },
 		},
 	},

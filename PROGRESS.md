@@ -1,54 +1,38 @@
 # Postęp
 
-## ▶ NASTĘPNY KROK (stan na koniec 2026-10-30)
+## ▶ NASTĘPNY KROK (stan na 2026-10-31)
 
-Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejka między serwerami) działa; Marek potwierdził test na dwóch kontach po publikacji, 2026-10-31. Następnie: medale, duchy, tryb Bitwa. Testy Lune: 129.
+River Riders: Kayak Race. Wioska (start place) i Spływ są opublikowane dla testerów. Tryby: Wyścig, Bitwa, Wodna bitwa. Testy Lune: 310.
 
-Do testu po publikacji (2026-10-31): medale, duchy, przycisk „Wyjdź”, proste sterowanie (tap po prawej = skręt w prawo, sprawdzone w Play) i przełącznik w wiosce. Testy Lune: 167. Następnie „rzeczna wioska”: gracze od razu w kajakach na jeziorze, bez nurtu.
+**Do sprawdzenia na dwóch kontach (komputer + telefon):**
+1. Czy pomost prowadzi na właściwą rzekę, czekanie na grupę, zderzenia kajaków w grupie.
+2. Kod błędu 2 przy teleporcie: raz na telefonie, nie powtórzył się. Jeśli wróci: `adb devices`, bez `logcat -d` z potokiem (ADB się wieszało), F9 → Server. Podejrzenia: `TeleportResult` 2 (GameNotFound) albo przestarzała para `ReserveServerAsync` + `ReservedServerAccessCode` (zamiennik: `TeleportOptions.ReservedServerId`). Sprawdzić też, czy gracz, który nie dotarł, nie blokuje czekania na grupę (`expected`, limit 15 s).
+3. Test z rodziną.
 
-Jeziorna wioska (kajak od startu, jezioro, strefa z boi, samouczek 4 kroki, menu ustawień) działa w Play 2026-10-31, kroki nauki 3–4 nieprzetestowane. Testy Lune: 307.
+Przed publiczną premierą: aktualizacja oceny zawartości (Bitwa) i dopracowanie wyglądu Bitwy, o które poprosił Marek.
 
-Tryb Bitwa: kod gotowy 2026-10-31, w Play solo sprawdzone skrzynki i przyspieszenie; ataki, siatka i tarcza wymagają dwóch graczy.
+Potem: analityka wg `PUBLISHING.md` (są `RaceFinished` i `RaceRating`), 2–3 nowe rzeki, kosmetyka (`COSMETICS.md`), turnieje (`TOURNAMENTS.md`).
 
-Wodna bitwa: działa na dwóch kontach po publikacji (kolejka, teleport, wyniki, kolejna runda), telefon około 43 FPS. Nowa walka (zbiornik, odepchnięcie, bok i tył, osłony) napisana; w Play sprawdzony zbiornik i „PUSTO”, reszta wymaga dwóch graczy.
+## Sprawdzone
 
-**Przed publiczną premierą:** sprawdzić tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
+Po publikacji, na dwóch kontach: wioska, kolejka między serwerami, teleport z telefonu, Wodna bitwa z wynikami i kolejną rundą, tablica czasów. Telefon: 41–45 FPS, ok. 1130 MB. Duchy i sterowanie potwierdzone przez Marka. Nowa walka w Wodnej bitwie działa na dwóch kontach (2026-10-31, Marek): strumień, odepchnięcie, strefa zabija, „Wodna bitwa działa ok”. Bitwa po przeróbce opublikowana i zaakceptowana przez Marka w grze (2026-10-31): skrzynki z ikonami i „?”, wymiana przedmiotu przez wpłynięcie w inną skrzynkę, 4 przedmioty bez wiosła, siatka z ogłuszeniem 2,5 s i spowolnieniem do 40% na 4 s.
 
-**Najpierw:** teleport wioska → spływ na dwóch kontach: komputer przeszedł, a telefon się nie połączył i Marek dostał **kod błędu 2**
-przy teleporcie. Sprawdzić: czy błąd był na telefonie, F9 → Server (linie `[Pier]`) oraz logi telefonu. ADB zawiesiło się przy
-zrzucie i `logcat` (timeout), więc najpierw `adb devices`, bez `logcat -d` z potokiem. Wcześniej raz pojawił się też komunikat „Nie udało się
-wypłynąć” bez znanej przyczyny, więc to może być ten sam problem. Podejrzany: przestarzała para `ReserveServerAsync` +
-`ReservedServerAccessCode`; dokumentacja zaleca `TeleportOptions.ReservedServerId` = GUID (`reserve()` w PierService).
-Sprawdzić też, czy gracz, który nie dotarł, nie blokuje czekania na grupę (`expected`, limit 15 s).
+W Play 2026-10-31:
+- Wodospad w górskiej rzece: spadek i lądowanie działają, kanion i kamera w porządku. Przez około sekundę po spadku kamera jest jeszcze nad górnym poziomem i kajak widać przez wodę; zostawione, bo mija samo.
+- Spokojna rzeka po zmianach: buduje się i płynie bez błędów.
+- Samouczek: wszystkie 4 kroki zaliczają się działaniem, na końcu „Gotowe” i `TutorialDone`.
 
-**Niezacommitowane:** poprawka gałki, głosowanie „Płyń teraz”, licznik decyzji po wyścigu. Marek jeszcze nie zgodził się na commit.
-Licznik nie był testowany z prawdziwymi graczami; wymaga publikacji obu miejsc.
+Szary ekran na zrzutach ze Studio to artefakt zrzutu, nie gra: w tym samym miejscu i czasie po restarcie Play obraz jest poprawny. Wraca losowo, także na starcie, a HUD i logika działają wtedy normalnie, więc do oceny wyglądu w Play trzeba czasem patrzeć na samo Studio.
 
-River Riders: Kayak Race. Dwa miejsca działają osobno w Studio. Testy Lune: 129. **Nic nie jest zacommitowane.**
+## Znane drobiazgi
 
-Sprawdzone w Play: wioska (teren, pomosty, chodzenie), panel kolejki, „Płyń teraz” z komunikatem Studio, start spływu
-i wyboru rzeki (fallback), „Do wioski” z komunikatem Studio.
+- Dziewiąta osoba na pełnym pomoście widzi „8/8”, a „Płyń teraz” nic nie daje; ponawianie teleportu jest w dwóch miejscach; nazwy pomostów są robocze.
+- Przy zmianie miejsca Rojo zostawia stare skrypty: usunąć je ręcznie w Edit.
+- Kajak bez wiosłowania utyka przy brzegu i nie dopływa (limit w grze 300 s), do oceny, czy to nie za surowe.
+- Błąd `rbxassetid://203785492` w konsoli nie pochodzi z kodu gry.
 
-Potwierdzone przez Marka po publikacji: teleport z pomostu, głosowanie „Płyń teraz” na dwóch kontach, zderzenia kajaków, „Jeszcze raz”; na telefonie gra się lepiej niż na komputerze. Pierwsza próba teleportu raz zawiodła, przyczyna nieznana.
+## Strojenie
 
-Do sprawdzenia:
-1. Czy pomost prowadzi na właściwą rzekę (MemoryStore), czekanie na grupę.
-   `ReserveServerAsync` jest w dokumentacji oznaczone jako przestarzałe; gdyby zawiodło, zmiana w `reserve()` w PierService.
-2. Ekran wyników z przyciskami „Jeszcze raz” i „Do wioski” (nieoglądany), przelot przez wodospad, kamera w kanionie.
-3. Spokojna rzeka w Play po zmianach, wyścig kilku graczy, telefon (ADB), zapis rekordu na żywo.
-
-Telefon: gałka w wiosce wraca po powrocie z rzeki (wioska przywraca `TouchControlsEnabled`), potwierdzone przez Marka 2026-10-30.
-
-Znane drobiazgi: dziewiąta osoba na pełnym pomoście widzi „8/8”, a „Płyń teraz” nic nie daje; ponawianie teleportu jest
-w dwóch miejscach; nazwy pomostów są robocze. Przy zmianie miejsca Rojo zostawia stare skrypty: usunąć je ręcznie w Edit.
-
-Rzeki: `Config.ACTIVE_RIVER` wybiera Test albo Mountain (teraz Mountain: 3 wodospady, kanion, bot ok. 3:05, szacunek dla człowieka ok. 2:25; spokojna: bot 2:35, szacunek ok. 2:00). Wioska nie jest jeszcze zaczęta: układ i kolejność w `VISION.md`, sekcje „Wioska i spływ” oraz „Rzeki i tryby”.
-
-Tempo wybrane w teście 2026-10-30: 0,85 s (ciąg 23, skręt 2,4), czas Marka 1:53. Przy 0,7 s było 1:56 i hamowanie z obracaniem przestawało być potrzebne. `CURRENT_SCALE = 0.7`. Kajak bez wiosłowania utyka na
-trasie i nie dopływa w 400 s (w grze obowiązuje limit 300 s) — do oceny, czy to nie za surowe.
-
-Potem wg `RETENTION.md`: medale, międzyczasy, duch. Zdarzenia analityczne: są `RaceFinished` i `RaceRating`,
-reszta listy z `PUBLISHING.md` do dodania.
+Tempo wybrane w teście 2026-10-30: 0,85 s (ciąg 23, skręt 2,4), czas Marka 1:53. Przy 0,7 s było 1:56 i hamowanie z obracaniem przestawało być potrzebne. `CURRENT_SCALE = 0.7`. Rzeki: Mountain (bot ok. 3:05, szacunek dla człowieka ok. 2:25), Test (bot 2:35, szacunek ok. 2:00).
 
 Odstępstwa od `ARCHITECTURE.md`: `PaddleEcho` nie wraca do nadawcy; solo krótsze wyniki i odliczanie (6 s + 5 s).
-Znane: błąd `rbxassetid://203785492` w konsoli nie pochodzi z kodu gry.

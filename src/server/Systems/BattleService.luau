@@ -147,8 +147,8 @@ local function onUse(player: Player)
 	if outcome.net then
 		sendNet(outcome.net, true)
 	end
-	-- Atak widzą wszyscy: strumień lub rozbryzg między strzelającym a celem.
-	if outcome.item == "cannon" or outcome.item == "splash" then
+	-- Atak widzą wszyscy: strumień między strzelającym a celem.
+	if outcome.item == "cannon" then
 		local victim = outcome.effects[1]
 		battleEffect:FireAllClients("seen", outcome.item, id, victim and victim.id)
 	end
