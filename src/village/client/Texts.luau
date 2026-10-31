@@ -1,10 +1,14 @@
 -- Wszystkie teksty interfejsu wioski w jednej tabeli (dla TS: plik tłumaczeń). %d i %s wypełnia string.format.
 
 return {
+	controlsSimple = "Sterowanie: proste",
+	controlsRealistic = "Sterowanie: realistyczne",
+
 	pickerOpen = "Wybierz rzekę",
 	pickerTitle = "Wybierz rzekę",
 	pickerClose = "X",
 	pickerSoon = "Wkrótce",
+	pickerMedalTime = "● %s", -- próg medalu na kafelku, kolor mówi który
 
 	queueTitle = "%s · %s", -- nazwa rzeki · trudność
 	queueStatus = "%d/%d, start za %d s",

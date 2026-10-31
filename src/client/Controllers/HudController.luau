@@ -1,4 +1,4 @@
--- HUD: odliczanie, czas, pasek trasy z kropkami graczy, miejsce, rekord, ekran wyników (z „Jeszcze raz” i „Do wioski”) i top 10.
+-- HUD: odliczanie, czas, pasek trasy z kropkami graczy, miejsce, rekord, ekran wyników (medal, „Jeszcze raz”, „Do wioski”) i top 10.
 -- Odświeża się 10 razy na sekundę, nie co klatkę. Układ jest w pikselach dla wysokości telefonu (Config.HUD_DESIGN_HEIGHT),
 -- a UIScale każdej grupy dopasowuje go do ekranu (dla TS: jak `rem` zależny od wysokości okna).
 -- Nic poza przyciskami nie jest Active, więc dotyk przechodzi przez HUD do sterowania.
@@ -13,6 +13,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Medals = require(Shared:WaitForChild("Medals"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local Client = script.Parent.Parent
@@ -34,6 +35,7 @@ local COLORS = {
 local FONT = Enum.Font.GothamMedium
 local FONT_BOLD = Enum.Font.GothamBold
 local MAX_ROWS = 10
+local RESULT_ROWS = Config.PIER_CAPACITY -- lewa kolumna: pod wierszami graczy stoją dwie linie medalu
 local MAX_DOTS = 12
 local POP = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
@@ -59,6 +61,8 @@ local dots: { Frame } = {}
 local panel: Frame = nil
 local panelTitle: TextLabel = nil
 local resultRows: { TextLabel } = {}
+local medalLabel: TextLabel = nil
+local goalLabel: TextLabel = nil
 local topTitle: TextLabel = nil
 local topRows: { TextLabel } = {}
 local againButton: TextButton = nil
@@ -71,6 +75,7 @@ local noticeUntil = 0 -- os.clock(), do kiedy widać komunikat o podróży
 local refreshTimer = 0
 local shownBig = ""
 local isNewRecord = false
+local awardedMedal = 0 -- stopień z MedalAwarded w tym wyścigu; 0 = medal nie wzrósł
 local otherHints: { [Model]: number } = {} -- ostatni odcinek rzeki każdego kajaka
 local otherS: { number } = {}
 
@@ -199,8 +204,8 @@ local function buildCenter()
 	}, center)
 end
 
-local function buildRows(parent: Frame, into: { TextLabel })
-	for i = 1, MAX_ROWS do
+local function buildRows(parent: Frame, into: { TextLabel }, count: number)
+	for i = 1, count do
 		into[i] = label({
 			Position = UDim2.fromOffset(0, 30 + (i - 1) * 22),
 			Size = UDim2.new(1, 0, 0, 21),
@@ -317,7 +322,24 @@ local function buildPanel()
 		BackgroundTransparency = 1,
 	}, panel)
 	panelTitle = label({ Size = UDim2.new(1, 0, 0, 26), TextSize = 20, TextColor3 = COLORS.accent, Text = Texts.resultsTitle }, left)
-	buildRows(left, resultRows)
+	buildRows(left, resultRows, RESULT_ROWS)
+	local medalTop = 30 + RESULT_ROWS * 22 + 2
+	medalLabel = label({
+		Position = UDim2.fromOffset(0, medalTop),
+		Size = UDim2.new(1, 0, 0, 22),
+		TextSize = 17,
+		TextStrokeTransparency = 1,
+		Text = "",
+	}, left)
+	goalLabel = label({
+		Position = UDim2.fromOffset(0, medalTop + 22),
+		Size = UDim2.new(1, 0, 0, 20),
+		Font = FONT,
+		TextSize = 15,
+		TextColor3 = COLORS.dim,
+		TextStrokeTransparency = 1,
+		Text = "",
+	}, left)
 
 	local right = make("Frame", {
 		AnchorPoint = Vector2.new(1, 0),
@@ -326,7 +348,7 @@ local function buildPanel()
 		BackgroundTransparency = 1,
 	}, panel)
 	topTitle = label({ Size = UDim2.new(1, 0, 0, 26), TextSize = 20, TextColor3 = COLORS.accent, Text = Texts.topTitle }, right)
-	buildRows(right, topRows)
+	buildRows(right, topRows, MAX_ROWS)
 
 	buildFeedback(panel)
 	buildActions(panel)
@@ -395,17 +417,45 @@ local function showVotes(again: number, leaving: number, undecided: number)
 	end
 end
 
+-- Stan medalu na ekranie wyników. `seconds` to czas gracza z RaceResults, czyli przyjęty przez serwer.
+-- Atrybutu brak, gdy profil się nie wczytał: gramy bez zapisu, więc nie ma czego pokazywać.
+-- MedalAwarded przychodzi przed RaceResults, a atrybut może się spóźnić, dlatego bierzemy wyższą z obu wartości.
+local function showMedal(seconds: number?)
+	local attribute = player:GetAttribute(Medals.ATTRIBUTE)
+	if type(attribute) ~= "number" or seconds == nil or Config.RIVER_MEDALS[river.id] == nil then
+		medalLabel.Text = ""
+		goalLabel.Text = ""
+		return
+	end
+	local held = math.max(attribute, awardedMedal)
+	if held == 0 then
+		medalLabel.Text = Texts.medalNone
+		medalLabel.TextColor3 = COLORS.dim
+	else
+		local template = if awardedMedal > 0 then Texts.medalNew else Texts.medalHeld
+		medalLabel.Text = string.format(template, Texts.medalNames[held])
+		medalLabel.TextColor3 = Medals.COLORS[held]
+	end
+	local goal, missing = Medals.nextGoal(river.id, held, seconds)
+	goalLabel.Text = if goal then string.format(Texts.medalGoal, Texts.medalNamesOf[goal], missing) else Texts.medalTop
+end
+
 local function showResults(rows: { any })
 	local ownId = player.UserId
+	local ownTime: number? = nil
 	local shown = 0
 	if type(rows) == "table" then
 		for place, row in rows do
-			if shown < MAX_ROWS and type(row) == "table" then
+			if type(row) == "table" and row.userId == ownId then
+				ownTime = row.time
+			end
+			if shown < RESULT_ROWS and type(row) == "table" then
 				shown += 1
 				setRow(resultRows[shown], place, tostring(row.name), row.time, row.userId == ownId)
 			end
 		end
 	end
+	showMedal(ownTime)
 	hideRows(resultRows, shown + 1)
 	if shown == 0 then
 		local first = resultRows[1]
@@ -563,6 +613,7 @@ function HudController.start()
 		if phase == "countdown" then
 			panel.Visible = false
 			isNewRecord = false
+			awardedMedal = 0
 		end
 	end)
 	Session.on("kayakRemoved", function(model: Model)
@@ -577,6 +628,9 @@ function HudController.start()
 		if newRecord then
 			isNewRecord = true
 		end
+	end)
+	Remotes.get("MedalAwarded").OnClientEvent:Connect(function(_riverId: string, rank: number)
+		awardedMedal = rank
 	end)
 
 	RunService.Heartbeat:Connect(onHeartbeat)

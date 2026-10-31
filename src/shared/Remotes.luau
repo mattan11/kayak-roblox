@@ -25,6 +25,9 @@ local DEFINITIONS: { [string]: Kind } = {
 	TravelNotice = "reliable", -- serwer → gracz: klucz tekstu o podróży
 	RaceAction = "reliable", -- klient → serwer (spływ): "again" | "village"
 	RaceVotes = "reliable", -- serwer → wszyscy (spływ): (płyną dalej, do wioski, niezdecydowani)
+	MedalAwarded = "reliable", -- serwer → gracz: (riverId, stopień 1..3) po przyjęciu czasu
+	GhostData = "reliable", -- serwer → gracz: (lista duchów) przed startem wyścigu
+	SettingAction = "reliable", -- klient → serwer: ("realistic", bool), PlayerSettings
 	PersonalBest = "reliable", -- serwer → gracz: (bestTime | nil, isNewRecord)
 }
 

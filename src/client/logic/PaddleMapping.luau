@@ -35,6 +35,12 @@ function PaddleMapping.classify(x: number, y: number, width: number, height: num
 	return if left then STROKE_LEFT else STROKE_RIGHT
 end
 
+-- Po której stronie kajaka idzie wiosło. Domyślnie gracz wskazuje kierunek: tap po prawej to skręt w prawo, czyli wiosło
+-- po lewej (lewe wiosło pcha dziób w prawo). W trybie realistycznym gracz wskazuje samo wiosło.
+function PaddleMapping.paddleSide(side: number, realistic: boolean): number
+	return if realistic then side else -side
+end
+
 function PaddleMapping.forKey(keyName: string): Action?
 	return KEYS[keyName]
 end

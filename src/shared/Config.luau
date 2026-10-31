@@ -80,6 +80,34 @@ local Config = {
 	TREE_MAX_BANK_DISTANCE = 100, -- najdalej od brzegu
 	RANKING_SIZE = 10, -- globalny ranking: top N
 
+	-- Medale
+	-- Czasy w sekundach (COSMETICS.md, sekcja 3). Rzeka bez wpisu nie daje medali, spec wymaga wpisu dla każdej dostępnej.
+	RIVER_MEDALS = {
+		Test = { gold = 118, silver = 135, bronze = 160 },
+		Mountain = { gold = 145, silver = 165, bronze = 190 },
+	},
+
+	-- Duchy
+	GHOST_SAMPLE_INTERVAL = 0.5, -- co ile s serwer zostawia próbkę przejazdu
+	GHOST_TIME_SCALE = 100, -- czas próbki w setnych sekundy
+	GHOST_POSITION_SCALE = 10, -- pozycja co 0,1 stud
+	GHOST_HEADING_STEPS = 256, -- pełny obrót dzielimy na tyle kroków
+	GHOST_MAX_SAMPLES = 640, -- RACE_TIME_LIMIT co 0,5 s plus punkt na mecie (sprawdza spec)
+	GHOST_MAX_COORD = 20000, -- dalej niż tyle studs od środka świata = uszkodzony ślad
+	GHOST_MAX_BYTES = 40000, -- limit JSON-a jednego śladu; limit klucza DataStore to 4 MB, zapas zostaje też dla remote
+	GHOST_TOP_REFRESH = 120, -- co ile s najwyżej serwer pyta o rekord świata
+	GHOST_SAVE_TRIES = 3, -- prób zapisu
+	GHOST_SAVE_WAIT = 2, -- odstęp między próbami
+	GHOST_CLOSE_WAIT = 20, -- tyle s najdłużej serwer czeka przy zamknięciu na trwający zapis
+	GHOST_TRANSPARENCY = 0.6,
+	GHOST_VISIBLE_RADIUS = 200, -- dalej od kamery duch znika (telefon)
+	GHOST_OWN_COLOR = Color3.fromRGB(150, 225, 255),
+	GHOST_WORLD_COLOR = Color3.fromRGB(255, 205, 80),
+	GHOST_HULL_LENGTH = 5.2, -- wymiary jak w KayakService
+	GHOST_TIP_LENGTH = 1.4,
+	GHOST_HULL_WIDTH = 2,
+	GHOST_HULL_HEIGHT = 1,
+
 	-- Klient
 	-- Sterowanie
 	HINT_USES = 8, -- po tylu dotknięciach podpowiedzi pól gasną
@@ -156,6 +184,8 @@ local Config = {
 	FEEDBACK_ENABLED = true, -- gwiazdki po wyścigu
 
 	-- Interfejs
+	LEAVE_CONFIRM_TIME = 6, -- po tylu sekundach bez decyzji okno „Opuścić rzekę?” się zamyka
+	LEAVE_TOP_OFFSET = 64, -- przycisk pod paskiem menu Robloxa
 	QUEUE_CONFIRM_TIME = 4, -- jak długo klient czeka na potwierdzenie dołączenia do kolejki
 	UI_NOTICE_TIME = 4, -- jak długo widać komunikat o podróży
 	UI_BUTTON_HEIGHT = 48, -- wysokość dużych przycisków (w pikselach projektu HUD)
@@ -169,7 +199,7 @@ local Config = {
 	PICKER_TILE_WIDTH = 172,
 	PICKER_TILE_HEIGHT = 146,
 	PICKER_TILE_GAP = 8,
-	PICKER_THUMB_HEIGHT = 96, -- miniaturka rzeki na górze kafelka
+	PICKER_THUMB_HEIGHT = 82, -- miniaturka rzeki na górze kafelka (pod nią nazwa, trudność i progi medali)
 	PICKER_THUMB_PADDING = 8, -- margines wewnątrz miniaturki
 	PICKER_THUMB_SEGMENTS = 28, -- Frame'ów na rzekę; 7 rzek to niecałe 200 Frame'ów, tworzonych raz
 	PICKER_THUMB_LINE = 4, -- grubość linii rzeki

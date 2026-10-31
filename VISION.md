@@ -11,7 +11,7 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
   pad L2/R2) = jedno pełne machnięcie wiosłem po tej stronie. Machnięcie ma **stałą długość** (~0,85 s, żeby każde było decyzją, a nie spamem).
 - Tapnięcie w trakcie machnięcia czeka w kolejce (max 1). Spam nic nie daje — telefon i komputer równo,
   autoclicker bez sensu. **Przytrzymanie** = machnięcia jedno po drugim (odpoczynek dla kciuka).
-- Machnięcie po lewej pcha do przodu i skręca w **prawo** (jak w prawdziwym kajaku), po prawej odwrotnie.
+- **Domyślnie gracz wskazuje kierunek:** tap po prawej to skręt w prawo, czyli wiosło po lewej (fizyka bez zmian). Test z rodziną 2026-10-31: odwrotne sterowanie myliło. W wiosce jest przełącznik „Sterowanie: realistyczne”.
 - **Nurt robi grę:** sam niesie kajak (na prostej można odpocząć), na zakrętach znosi na zewnętrzny brzeg,
   w bystrzach jest szybki i wąsko. Najszybciej płynie środek rzeki, przy brzegu woda jest wolniejsza.
 - **Uderzenie w skałę / brzeg / inny kajak = odbicie i utrata prędkości.** Bez śmierci, bez restartu.

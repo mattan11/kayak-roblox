@@ -1,8 +1,9 @@
 -- Wszystkie teksty interfejsu w jednej tabeli (dla TS: plik tłumaczeń). %d i %s wypełnia string.format.
 
 return {
-	hintStroke = "Machnięcie",
-	hintBrace = "Wbicie wiosła",
+	hintStrokeLeft = "W lewo",
+	hintStrokeRight = "W prawo",
+	hintBrace = "Hamuj i skręć",
 	hintKeysStrokeLeft = "A / ←",
 	hintKeysStrokeRight = "D / →",
 	hintKeysBraceLeft = "Q",
@@ -24,6 +25,15 @@ return {
 	topTitle = "Top 10",
 	resultRow = "%d. %s",
 	noResults = "Nikt nie dopłynął",
+
+	-- Indeks = stopień medalu (Medals.RANKS).
+	medalNames = { "Brąz", "Srebro", "Złoto" },
+	medalNamesOf = { "brązu", "srebra", "złota" },
+	medalNew = "Nowy medal: %s!",
+	medalHeld = "Twój medal: %s",
+	medalNone = "Bez medalu",
+	medalGoal = "Do %s brakuje %.1f s",
+	medalTop = "Masz najwyższy medal",
 
 	feedbackAsk = "Jak się grało?",
 	feedbackThanks = "Dzięki!",

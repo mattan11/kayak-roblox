@@ -2,7 +2,9 @@
 
 ## ▶ NASTĘPNY KROK (stan na koniec 2026-10-30)
 
-Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejka między serwerami) działa w Play w trybie lokalnym, 2026-10-31. Prawdziwy MemoryStore, MessagingService i teleport czekają na publikację. Testy Lune: 129.
+Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejka między serwerami) działa; Marek potwierdził test na dwóch kontach po publikacji, 2026-10-31. Następnie: medale, duchy, tryb Bitwa. Testy Lune: 129.
+
+Do testu po publikacji (2026-10-31): medale, duchy, przycisk „Wyjdź”, proste sterowanie (tap po prawej = skręt w prawo, sprawdzone w Play) i przełącznik w wiosce. Testy Lune: 167. Następnie „rzeczna wioska”: gracze od razu w kajakach na jeziorze, bez nurtu.
 
 **Przed publiczną premierą:** tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
 

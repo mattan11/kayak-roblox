@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Medals = require(Shared:WaitForChild("Medals"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local River = require(Shared:WaitForChild("River"))
 local RiverThumbnail = require(Shared:WaitForChild("RiverThumbnail"))
@@ -232,6 +233,26 @@ local function drawThumbnails()
 	end
 end
 
+-- Progi medali w trzech równych kolumnach, od brązu do złota. Tylko czasy z Config: wioska nie ma ProfileStore,
+-- więc nie zna medali gracza.
+local function buildMedalTimes(entry: Entry, tile: Instance, top: number)
+	local times = Config.RIVER_MEDALS[entry.river or entry.id]
+	if times == nil then
+		return
+	end
+	local width = (Config.PICKER_TILE_WIDTH - 18) // #Medals.RANKS
+	for rank, key in Medals.RANKS do
+		label({
+			Position = UDim2.fromOffset(9 + (rank - 1) * width, top),
+			Size = UDim2.fromOffset(width, 16),
+			Font = FONT,
+			TextSize = 13,
+			TextColor3 = Medals.COLORS[rank],
+			Text = string.format(Texts.pickerMedalTime, Medals.clock(times[key])),
+		}, tile)
+	end
+end
+
 local function buildTile(entry: Entry, order: number)
 	local available = entry.available == true
 	local tile: any = make(if available then "TextButton" else "Frame", {
@@ -265,6 +286,8 @@ local function buildTile(entry: Entry, order: number)
 		TextColor3 = DIFFICULTY_COLORS[entry.difficulty] or COLORS.dim,
 		Text = entry.difficulty,
 	}, tile)
+
+	buildMedalTimes(entry, tile, textTop + 36)
 
 	if available then
 		tile.Text = ""

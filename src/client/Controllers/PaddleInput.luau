@@ -51,10 +51,15 @@ local function fadeHints()
 	end)
 end
 
+-- Ustawienie z wioski: atrybut gracza (Shared.PlayerSettings).
+local function isRealistic(): boolean
+	return player:GetAttribute("RealisticPaddle") == true
+end
+
 local function press(action: any)
 	PaddleMapping.press(held, action)
 	if action.kind == "stroke" and Session.active then
-		KayakPhysics.requestStroke(Session.state, action.side)
+		KayakPhysics.requestStroke(Session.state, PaddleMapping.paddleSide(action.side, isRealistic()))
 	end
 	uses += 1
 	if uses >= Config.HINT_USES then
@@ -166,8 +171,8 @@ local function createHints()
 	local touch = UserInputService.TouchEnabled
 	local braceTop = Config.BRACE_ZONE == "top"
 	local strokeY, braceY = if braceTop then 0.5 else 0, if braceTop then 0 else 0.5
-	addHint(gui, UDim2.fromScale(0, strokeY), Texts.hintStroke, if touch then "" else Texts.hintKeysStrokeLeft)
-	addHint(gui, UDim2.fromScale(0.5, strokeY), Texts.hintStroke, if touch then "" else Texts.hintKeysStrokeRight)
+	addHint(gui, UDim2.fromScale(0, strokeY), Texts.hintStrokeLeft, if touch then "" else Texts.hintKeysStrokeLeft)
+	addHint(gui, UDim2.fromScale(0.5, strokeY), Texts.hintStrokeRight, if touch then "" else Texts.hintKeysStrokeRight)
 	addHint(gui, UDim2.fromScale(0, braceY), Texts.hintBrace, if touch then "" else Texts.hintKeysBraceLeft)
 	addHint(gui, UDim2.fromScale(0.5, braceY), Texts.hintBrace, if touch then "" else Texts.hintKeysBraceRight)
 
@@ -195,7 +200,7 @@ function PaddleInput.feedHeldStrokes(state: any)
 	if state.queued == nil and state.strokeSide == nil then
 		local side = PaddleMapping.nextHeldStroke(held)
 		if side then
-			KayakPhysics.requestStroke(state, side)
+			KayakPhysics.requestStroke(state, PaddleMapping.paddleSide(side, isRealistic()))
 		end
 	end
 end

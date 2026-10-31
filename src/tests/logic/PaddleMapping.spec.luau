@@ -9,6 +9,11 @@ return function(t)
 	end
 
 	t.describe("classify", function()
+		t.it("domyślnie tap po prawej to wiosło po lewej, w trybie realistycznym po prawej", function()
+			t.expect(PaddleMapping.paddleSide(1, false)).toBe(-1)
+			t.expect(PaddleMapping.paddleSide(-1, false)).toBe(1)
+			t.expect(PaddleMapping.paddleSide(1, true)).toBe(1)
+		end)
 		t.it("bottom: dolne pola to wbicie, górne machnięcie", function()
 			t.expect(classify(100, 700, 1000, 800, "bottom").kind).toBe("brace")
 			t.expect(classify(100, 700, 1000, 800, "bottom").side).toBe(-1)

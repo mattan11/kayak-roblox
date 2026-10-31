@@ -11,6 +11,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local RaceLogic = require(script.Parent.Parent.RaceLogic)
 local Analytics = require(script.Parent.Analytics)
+local GhostService = require(script.Parent.GhostService)
 local KayakService = require(script.Parent.KayakService)
 local Leaderboard = require(script.Parent.Leaderboard)
 local PlayerData = require(script.Parent.PlayerData)
@@ -41,12 +42,14 @@ local function enroll(player: Player, now: number)
 	hints[player.UserId] = q.index
 	KayakService.place(player, position, heading)
 	resetEvent:FireClient(player, position.X, position.Y, heading)
+	GhostService.prepare(player)
 end
 
 local function onFinished(player: Player, time: number)
 	KayakService.setFinished(player)
 	PlayerData.recordFinish(player, time)
 	Analytics.raceFinished(player, time)
+	GhostService.finish(player, time)
 end
 
 local function sampleRacers(now: number)
@@ -61,6 +64,9 @@ local function sampleRacers(now: number)
 			local q = river:query(position, if jumped then nil else hints[id])
 			hints[id] = q.index
 			local outcome = race:sample(id, position, q.s, math.abs(q.lateral) - q.halfWidth, now)
+			if racer.startedAt and outcome ~= "invalid" then
+				GhostService.sample(id, now - racer.startedAt, hull, outcome == "finished")
+			end
 			if outcome == "finished" then
 				onFinished(player, race.racers[id].time)
 			elseif outcome == "invalid" then
