@@ -112,6 +112,23 @@ local function glide(state: any, dt: number)
 	state.heading = KayakPose.wrapAngle(state.heading + state.spin * dt)
 end
 
+-- Jezioro po starcie grupy: wiosła puszczone, kajak wytraca prędkość, ale brzeg i przeszkody dalej działają.
+local function coast(state: any, dt: number)
+	state.strokeSide, state.queued = nil, nil
+	state.velocity *= math.exp(-Config.GLIDE_DRAG * dt)
+	collectOthers()
+	KayakPhysics.step(state, Session.river, others, dt)
+end
+
+-- W wiosce sterujemy zawsze, oprócz chwili między startem grupy a teleportem. Atrybut ustawia MatchService;
+-- gdy teleport się nie uda, serwer go zdejmie i sterowanie wraca samo.
+local function canSteer(finished: boolean): boolean
+	if Session.phase == "free" then
+		return Players.LocalPlayer:GetAttribute("QueueTraveling") ~= true
+	end
+	return Session.phase == "racing" and not finished
+end
+
 local function updateClock(state: any, finished: boolean)
 	local now = workspace:GetServerTimeNow()
 	local q = state.lastQuery
@@ -133,7 +150,7 @@ local function frame(dt: number)
 
 	local model = Session.ownModel :: Model
 	local finished = model:GetAttribute("Finished") == true
-	Session.active = Session.phase == "racing" and not finished
+	Session.active = canSteer(finished)
 	updateClock(state, finished)
 
 	if Session.active then
@@ -146,7 +163,11 @@ local function frame(dt: number)
 		end
 	else
 		updateBrace(state, nil)
-		glide(state, dt)
+		if Session.phase == "free" then
+			coast(state, dt)
+		else
+			glide(state, dt)
+		end
 	end
 
 	-- lastHit czytamy tylko tutaj, a reszta dostaje zdarzenie (inaczej pierwszy czytający zabrałby je innym)

@@ -207,33 +207,38 @@ local Config = {
 	PICKER_THUMB_STRETCH = 3, -- rzeki są długie i wąskie: oś poprzeczna może urosnąć tyle razy
 
 	-- Wioska
-	VILLAGE_SIZE = 300, -- bok kwadratu terenu
-	VILLAGE_BOUNDS = 142, -- niewidzialne ściany tyle od środka
-	VILLAGE_LAKE_Z = -30, -- środek jeziora (x = 0)
-	VILLAGE_LAKE_RADIUS = 90,
+	VILLAGE_SIZE = 560, -- bok kwadratu terenu
+	VILLAGE_LAKE_Z = 0, -- środek jeziora (x = 0), układ boi: content/LakeLayout
+	VILLAGE_LAKE_RADIUS = 170, -- kilka do kilkunastu sekund pływania w każdą stronę
+	VILLAGE_KAYAK_SPACING = 7, -- rozsunięcie kajaków w punkcie startu (w poprzek i wzdłuż kursu)
+	VILLAGE_KAYAK_COLUMNS = 5, -- kajaków w rzędzie
+	VILLAGE_KAYAK_SLOTS = 20, -- po tylu graczach numeracja miejsc zaczyna się od nowa (zderzenia rozsuną ewentualny tłok)
 	VILLAGE_BEACH_WIDTH = 16,
-	VILLAGE_SPAWN_Z = 110, -- miejsce pojawienia (x = 0), po stronie lądu
-	VILLAGE_TREES = 32,
-	VILLAGE_CAMPFIRE_X = -16, -- ognisko z boku placu, poza drogą ze spawnu na pomost (x = 0)
-	VILLAGE_CAMPFIRE_Z = 96,
+	VILLAGE_ZONE_RADIUS = 24, -- ring żółtych boi: strefa startu
+	VILLAGE_ZONE_BUOYS = 20,
+	VILLAGE_TREES = 44,
+	VILLAGE_CAMPFIRE_X = 20, -- ognisko na południowym brzegu, między domkami
+	VILLAGE_CAMPFIRE_Z = 158,
 	VILLAGE_BOARD_CLEARANCE = 3, -- dolna krawędź tablic nad ziemią
-	VILLAGE_BOARD_PIXELS = 25, -- gęstość SurfaceGui na tablicach (pikseli na stud)
-	VILLAGE_RIVER_BOARD_X = -18, -- plansza rzek: przy wejściu na pomost, po lewej
-	VILLAGE_RIVER_BOARD_Z = 74,
-	VILLAGE_RIVER_BOARD_WIDTH = 24,
-	VILLAGE_RIVER_BOARD_HEIGHT = 18,
-	VILLAGE_RESULTS_BOARD_X = 18, -- tablica wyników: na placu, po prawej, widać ją od spawnu
-	VILLAGE_RESULTS_BOARD_Z = 86,
-	VILLAGE_RESULTS_BOARD_WIDTH = 28,
-	VILLAGE_RESULTS_BOARD_HEIGHT = 20,
+	VILLAGE_BOARD_PIXELS = 20, -- gęstość SurfaceGui na tablicach (pikseli na stud)
+	VILLAGE_BOARD_Z = -170, -- obie tablice na północnej plaży, po bokach strefy startu
+	VILLAGE_RIVER_BOARD_X = -48,
+	VILLAGE_RIVER_BOARD_WIDTH = 40,
+	VILLAGE_RIVER_BOARD_HEIGHT = 28,
+	VILLAGE_RESULTS_BOARD_X = 48,
+	VILLAGE_RESULTS_BOARD_WIDTH = 44,
+	VILLAGE_RESULTS_BOARD_HEIGHT = 32,
+	VILLAGE_PICKER_BUTTON_WIDTH = 200, -- „Wybierz rzekę”: u góry, na środku, poza zasięgiem kciuków
+	VILLAGE_PICKER_BUTTON_TOP = 12,
+	VILLAGE_NOTICE_TOP = 80, -- komunikat o podróży pod tym przyciskiem
 	RESULTS_ROTATE_TIME = 6, -- co tyle s tablica pokazuje następną rzekę
 	RESULTS_REFRESH_TIME = 60, -- co tyle s nowy odczyt rankingów
-	PIER_START_ON_BEACH = 14, -- początek pomostu tyle od brzegu wody
-	PIER_LENGTH = 38,
-	PIER_WIDTH = 14, -- jeden szeroki pomost: mieści całą kolejkę
-	PIER_PLANK_SPACING = 2.1,
-	PIER_DECK_Y = 2.6, -- wierzch desek, trochę poniżej górnego stopnia plaży
-	PIER_QUEUE_START = 8, -- strefa kolejki zaczyna się tyle od początku pomostu
+	TUTORIAL_TICK = 0.1, -- co ile s nauka odczytuje pozycję kajaka
+	TUTORIAL_TURN_ANGLE = 0.35, -- krok „skręć”: tyle radianów w dobrą stronę (ok. 20°)
+	TUTORIAL_STRAIGHT_DISTANCE = 30, -- krok „płyń prosto”: tyle studs od punktu startu kroku
+	TUTORIAL_BRAKE_TIME = 0.6, -- krok „hamuj”: tyle sekund trzymania wiosła po wskazanej stronie
+	TUTORIAL_MARKER_HEIGHT = 9, -- znacznik celu nad wodą
+	TUTORIAL_DONE_TIME = 4, -- jak długo widać „Gotowe”
 
 	-- Podróż
 	PIER_CAPACITY = 8, -- limit graczy na pomoście i w wyścigu (VISION.md)

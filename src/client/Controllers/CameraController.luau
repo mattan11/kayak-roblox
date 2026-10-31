@@ -26,8 +26,8 @@ local following = false
 
 local function aimAngle(state: any): number
 	local q = state.lastQuery
-	if q == nil then
-		return state.heading
+	if q == nil or Session.river.still then
+		return state.heading -- jezioro nie ma biegu, a jego „tangent” to tylko styczna do brzegu
 	end
 	return KayakPose.lerpAngle(state.heading, math.atan2(q.tangent.Y, q.tangent.X), Config.CAMERA_RIVER_BLEND)
 end

@@ -1,9 +1,10 @@
--- Wybór rzeki w wiosce: przycisk „Wybierz rzekę” w strefie przy pomoście, okno z kafelkami 7 rzek i panel kolejki.
+-- Wybór rzeki w wiosce: przycisk „Wybierz rzekę” w strefie startu na jeziorze, okno z kafelkami 7 rzek i panel kolejki.
 -- Stan to kilka zmiennych (inZone, pickerOpen, joined, voted), a `render()` wylicza z nich widoczność, jak czysty render
 -- w React. Serwer rozgłasza stan KAŻDEJ rzeki (QueueState), a klient wybiera tę, do której dołączył
 -- (dla TS: globalny store z websocketa + selektor po `joined`).
 -- Układ w pikselach dla wysokości telefonu, UIScale dopasowuje go do ekranu, jak w HudController.
--- Panel i przycisk stoją między gałką ruchu (dół, lewo) a przyciskiem skoku (dół, prawo). Tylko przyciski i okno są Active.
+-- Cały ekran to pola wiosła, a kciuki leżą przy dolnych rogach, więc przycisk stoi u góry na środku, a panel między rogami.
+-- Tylko przyciski i okno są Active: tam dotyk nie trafia do wiosła (`processed` w PaddleInput), reszta przechodzi na wodę.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -71,7 +72,7 @@ local queues: { [string]: Queue } = {} -- ostatni QueueState każdej rzeki
 local tiles: { Tile } = {}
 local thumbnailsDrawn = false
 
-local inZone = false -- gracz stoi w QueueZone (po pozycji)
+local inZone = false -- kajak jest w QueueZone (po pozycji)
 local pickerOpen = false
 local joined: Entry? = nil -- rzeka, do której gracz dołączył
 local voted = false -- ten gracz kliknął już „Płyń teraz”
@@ -217,7 +218,7 @@ local function drawThumbnail(tile: Tile)
 	end
 end
 
--- Liczone przy pierwszym otwarciu okna, nie przy starcie: większość graczy w wiosce ma być od razu gotowa do chodzenia.
+-- Liczone przy pierwszym otwarciu okna, nie przy starcie: większość graczy w wiosce ma od razu pływać.
 local function drawThumbnails()
 	if thumbnailsDrawn then
 		return
@@ -323,9 +324,9 @@ end
 local function buildOpenButton()
 	openButton = make("TextButton", {
 		Name = "OpenPicker",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(Config.PIER_PANEL_LEFT, 0, 1, -12),
-		Size = UDim2.fromOffset(Config.PIER_PANEL_WIDTH, Config.PICKER_OPEN_HEIGHT),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, Config.VILLAGE_PICKER_BUTTON_TOP),
+		Size = UDim2.fromOffset(Config.VILLAGE_PICKER_BUTTON_WIDTH, Config.PICKER_OPEN_HEIGHT),
 		BackgroundColor3 = COLORS.accent,
 		Font = FONT_BOLD,
 		Text = Texts.pickerOpen,
@@ -491,7 +492,7 @@ local function buildNotice()
 	noticeGroup = make("Frame", {
 		Name = "Notice",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 12),
+		Position = UDim2.new(0.5, 0, 0, Config.VILLAGE_NOTICE_TOP),
 		Size = UDim2.fromOffset(420, 34),
 		BackgroundColor3 = COLORS.panel,
 		BackgroundTransparency = 0.12,
@@ -517,7 +518,7 @@ local function showNotice(key: any)
 	render()
 end
 
--- Czy gracz stoi w strefie: pozycja w układzie strefy kontra pół rozmiaru.
+-- Czy kajak jest w strefie: pozycja w układzie strefy kontra pół rozmiaru.
 local function isInZone(position: Vector3): boolean
 	local folder = workspace:FindFirstChild("Piers")
 	if folder == nil then
@@ -535,7 +536,14 @@ local function isInZone(position: Vector3): boolean
 	return false
 end
 
+-- Najpierw kajak; postać zostaje na czas, gdy kajaka jeszcze nie ma (dołączanie, odrodzenie).
 local function ownPosition(): Vector3?
+	local kayaks = workspace:FindFirstChild("Kayaks")
+	local model = kayaks and kayaks:FindFirstChild(tostring(player.UserId))
+	local hull = model and model:FindFirstChild("Hull")
+	if hull and hull:IsA("BasePart") then
+		return hull.Position
+	end
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	return if root and root:IsA("BasePart") then root.Position else nil

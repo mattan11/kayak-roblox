@@ -8,6 +8,13 @@
 - `src/client/init.client.luau` + `Controllers/*` — to samo po stronie klienta.
 - `Remotes.onServer(name, rate, burst, handler)` na serwerze (limit zapytań), `Remotes.get(name)` wszędzie indziej.
 
+## Wspólny kod wioski i spływu
+
+`village.project.json` montuje całe `src/client` jako `Client`, a `src/village/client` jako jego podskrypt `Client.Village` (uruchamia się
+sam i startuje tylko kontrolery wioski). `KayakService` jest podpięty jako `Server.KayakService`, a używa go system `VillageKayaks`.
+Wioska nie startuje `HudController`, `LeaveButton` ani `GhostController` (`RACE_ONLY` w `src/client/init.client.luau`).
+`Session.river` to tam `Lake` (interfejs jak `River`, `still = true`), `Session.phase` to stałe `"free"`. Atrybut `QueueTraveling` zabiera stery.
+
 ## Kto o czym decyduje
 
 - **Klient** liczy fizykę swojego kajaka (`KayakPhysics.step`) i ustawia cele `AlignPosition.Position` oraz

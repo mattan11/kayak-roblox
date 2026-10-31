@@ -4,6 +4,8 @@
 -- Co widać: smugi nurtu płyną z River:currentAt (długość zależy od prędkości, więc prąd i wiry są czytelne), piana
 -- w bystrzach i wokół skał, obracające się smugi w wirach za skałami, fala od dziobu i kilwater, rozbryzgi wioseł.
 -- Pozycje idą zbiorczo przez workspace:BulkMoveTo (dużo tańsze niż pojedyncze .CFrame).
+-- Stojąca woda (river.still, jezioro): bez nurtu nie ma smug, piany ani wirów, więc te pule są puste, a losowanie nie rusza.
+-- Zostają fala od dziobu, kilwater i rozbryzgi wioseł.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -364,20 +366,7 @@ local function onHit(strength: number)
 	hitSound:Play()
 end
 
-local function frame(dt: number)
-	updateSlots(dt)
-
-	local state = Session.state
-	local camera = workspace.CurrentCamera
-	if state == nil or camera == nil then
-		return
-	end
-	local q = state.lastQuery
-	if q == nil then
-		return
-	end
-	local focus = state.position
-
+local function updateCurrentEffects(dt: number, focus: Vector2, q: any)
 	rockTimer -= dt
 	if rockTimer <= 0 then
 		rockTimer = Config.FX_ROCKS_REFRESH
@@ -399,7 +388,25 @@ local function frame(dt: number)
 		eddyBudget -= 1
 		spawnEddy()
 	end
+end
 
+local function frame(dt: number)
+	updateSlots(dt)
+
+	local state = Session.state
+	local camera = workspace.CurrentCamera
+	if state == nil or camera == nil then
+		return
+	end
+	local q = state.lastQuery
+	if q == nil then
+		return
+	end
+	local focus = state.position
+
+	if not river.still then
+		updateCurrentEffects(dt, focus, q)
+	end
 	updateWakes(dt, camera.CFrame.Position)
 	updateBraceSpray(dt)
 end
@@ -469,12 +476,14 @@ function WaterEffects.start()
 	folder.Name = "WaterFx"
 	folder.Parent = workspace
 
-	fillPool(streaks, Config.FX_STREAKS, false, STREAK_COLOR)
-	fillPool(foam, Config.FX_FOAM, true, FOAM_COLOR)
-	fillPool(eddies, Config.FX_EDDY, false, STREAK_COLOR)
+	if not river.still then
+		fillPool(streaks, Config.FX_STREAKS, false, STREAK_COLOR)
+		fillPool(foam, Config.FX_FOAM, true, FOAM_COLOR)
+		fillPool(eddies, Config.FX_EDDY, false, STREAK_COLOR)
+		prepareRocks()
+	end
 	fillPool(wakes, Config.FX_WAKE, false, FOAM_COLOR)
 	createSpray()
-	prepareRocks()
 
 	strokeSound = newSound("rbxasset://sounds/action_swim.mp3", 0.25)
 	hitSound = newSound("rbxasset://sounds/impact_water.mp3", 0.5)

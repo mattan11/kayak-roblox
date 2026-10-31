@@ -6,6 +6,8 @@ Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejk
 
 Do testu po publikacji (2026-10-31): medale, duchy, przycisk „Wyjdź”, proste sterowanie (tap po prawej = skręt w prawo, sprawdzone w Play) i przełącznik w wiosce. Testy Lune: 167. Następnie „rzeczna wioska”: gracze od razu w kajakach na jeziorze, bez nurtu.
 
+Jeziorna wioska (kajak od startu, jezioro, strefa z boi, samouczek 4 kroki, menu ustawień) działa w Play 2026-10-31, kroki nauki 3–4 nieprzetestowane. Testy Lune: 179.
+
 **Przed publiczną premierą:** tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
 
 **Najpierw:** teleport wioska → spływ na dwóch kontach: komputer przeszedł, a telefon się nie połączył i Marek dostał **kod błędu 2**

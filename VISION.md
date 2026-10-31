@@ -23,7 +23,7 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
 
 - **Dwa miejsca:** wioska (spotkania, wybór rzeki) i jedno miejsce „Spływ”. Rzeki to pliki danych, serwer spływu wczytuje
   wybraną i buduje teren przy starcie. Nowa rzeka nie wymaga nowego miejsca. Do zmierzenia: czas budowy terenu po teleporcie.
-- **Pomost = lobby:** jeden pomost z planszą rzek; wybór rzeki to kolejka między serwerami („3/8, start za 25 s”). Odliczanie ok. 30 s rusza z pierwszą osobą,
+- **Jezioro = lobby:** gracz od razu pływa w kajaku po jeziorze bez nurtu, a samouczek uczy sterowania. Strefa startu to ring żółtych boi; wybór rzeki to kolejka między serwerami („3/8, start za 25 s”). Odliczanie ok. 30 s rusza z pierwszą osobą,
   a komplet startuje od razu. Przycisk „Płyń teraz” to głos: rusza, gdy kliknie cała kolejka, a solo od razu.
 - **Teleport grupy:** wioska tworzy serwer zarezerwowany (`ReserveServer`) i przenosi cały pomost. Na spływie spotykają się
   gracze z tej samej wioski. Globalne dobieranie (MemoryStore) dopiero, gdy dane pokażą wiele wiosek z pustymi pomostami.
@@ -51,6 +51,8 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
   - Przedmioty rozstrzyga serwer: klient prosi o użycie, serwer sprawdza posiadanie, zasięg i czas odnowienia, a dopiero
     potem wysyła skutek do kajaka ofiary (fizykę liczy jej urządzenie).
   - Skrzynki to dane rzeki, więc tryb działa na każdej trasie.
+- **Armatka wodna:** jeden z przedmiotów trybu Bitwa, automatyczne celowanie w najbliższego gracza przed dziobem (kciuki są zajęte wiosłowaniem).
+- **Wodna bitwa (po premierze, gdy będą gracze):** battle royale na jeziorze na kodzie trybu Bitwa. Polewanie zdejmuje wytrzymałość, wygrywa ostatni na wodzie, strefa kurczy się do środka, odpadający szybko wchodzą do następnej rundy. Wymaga 4–8 graczy naraz.
 - **Kolejność całości:** wioska 2.0 i kolejka → medale → duchy → tryb Bitwa (**wymagany przed publiczną premierą**, decyzja Marka 2026-10-31) → pozostałe stałe rzeki → waluta, kosmetyki, skarby (`MONETIZATION.md`, plan w `COSMETICS.md`) → Rzeka tygodnia → turnieje (`TOURNAMENTS.md`).
 
 ## Monetyzacja

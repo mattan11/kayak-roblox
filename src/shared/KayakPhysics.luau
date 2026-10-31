@@ -174,8 +174,8 @@ local function fixedStep(state: State, river: any, others: { Vector2 }?, dt: num
 		local still = Config.BRACE_TURN_STILL
 		torque = state.brace * Config.BRACE_TURN * (still + (1 - still) * flow)
 		dragForward += Config.BRACE_DRAG
-	else
-		-- Nurt powoli ustawia dziób z prądem
+	elseif current.Magnitude > 0 then
+		-- Nurt powoli ustawia dziób z prądem. Stojąca woda nie ma kierunku, więc na jeziorze kajak trzyma swój kurs.
 		local flowHeading = math.atan2(current.Y, current.X)
 		torque += wrapAngle(flowHeading - state.heading) * Config.ALIGN_TO_FLOW
 	end

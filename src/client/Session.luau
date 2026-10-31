@@ -5,12 +5,18 @@
 --   "phase" (phase, endsAt)       zmiana fazy wyścigu
 --   "reset" ()                    nowy stan fizyki po Reset
 --   "kayakRemoved" (model)        kajak zniknął, sprzątamy rekordy
+--
+-- W wiosce rzeką jest Lake, a faza to stałe "free": bez zegara i mety, reszta kontrolerów działa tak samo.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local River = require(Shared:WaitForChild("River"))
+local Lake = require(Shared:WaitForChild("Lake"))
 local Config = require(Shared:WaitForChild("Config"))
+local Places = require(Shared:WaitForChild("Places"))
+
+local inVillage = Places.current().id == "village"
 
 -- Serwer wybiera rzekę po starcie i ogłasza ją atrybutem workspace.RiverId. Ten moduł czeka na niego już przy require,
 -- więc każdy kontroler może spokojnie czytać Session.river, nawet na górze pliku: dostanie gotową rzekę.
@@ -26,15 +32,21 @@ local function waitForRiverId(): string
 	end
 end
 
-local rivers = Shared:WaitForChild("content"):WaitForChild("rivers")
-local riverModule = rivers:FindFirstChild(waitForRiverId()) or rivers:WaitForChild(Config.ACTIVE_RIVER)
+local function loadWater(): any
+	local content = Shared:WaitForChild("content")
+	if inVillage then
+		return Lake.new(require(content:WaitForChild("LakeLayout")))
+	end
+	local rivers = content:WaitForChild("rivers")
+	return River.new(require(rivers:FindFirstChild(waitForRiverId()) or rivers:WaitForChild(Config.ACTIVE_RIVER)))
+end
 
 local Session = {
-	river = River.new(require(riverModule)),
-	phase = "waiting",
+	river = loadWater(),
+	phase = if inVillage then "free" else "waiting",
 	phaseEndsAt = 0,
 	state = nil :: any, -- KayakPhysics.State; nil do pierwszego Reset
-	active = false, -- czy gracz właśnie steruje (faza racing, kajak gotowy, przed metą)
+	active = false, -- czy gracz właśnie steruje (racing przed metą albo free, kajak gotowy)
 	ownModel = nil :: Model?,
 	ownHull = nil :: BasePart?, -- ustawiany dopiero, gdy kajak ma komplet części
 	kayaks = {} :: { Model }, -- wszystkie kajaki (też własny); tablica, żeby iterować bez alokacji

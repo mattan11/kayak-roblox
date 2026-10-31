@@ -6,6 +6,7 @@
 -- Telefon: ukryty model nie ma rodzica (zero rysowania), bez cieni, a daleki duch znika. Model tworzymy dopiero przy
 -- pierwszym śladzie, więc nowy gracz nie płaci za nic.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -121,7 +122,8 @@ end
 local function frame()
 	local startedAt = Session.startedAt
 	local camera = workspace.CurrentCamera
-	if Session.phase ~= "racing" or not Session.active or startedAt == nil or camera == nil then
+	-- Atrybut HideGhosts: ustawienie gracza z wioski (Shared.PlayerSettings).
+	if Session.phase ~= "racing" or not Session.active or startedAt == nil or camera == nil or Players.LocalPlayer:GetAttribute("HideGhosts") == true then
 		for _, ghost in pool do
 			hide(ghost)
 		end

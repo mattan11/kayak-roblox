@@ -27,7 +27,7 @@ local DEFINITIONS: { [string]: Kind } = {
 	RaceVotes = "reliable", -- serwer → wszyscy (spływ): (płyną dalej, do wioski, niezdecydowani)
 	MedalAwarded = "reliable", -- serwer → gracz: (riverId, stopień 1..3) po przyjęciu czasu
 	GhostData = "reliable", -- serwer → gracz: (lista duchów) przed startem wyścigu
-	SettingAction = "reliable", -- klient → serwer: ("realistic", bool), PlayerSettings
+	SettingAction = "reliable", -- klient → serwer: (nazwa ustawienia, bool), PlayerSettings
 	PersonalBest = "reliable", -- serwer → gracz: (bestTime | nil, isNewRecord)
 }
 

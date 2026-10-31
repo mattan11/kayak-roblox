@@ -14,13 +14,19 @@
     },
     "ServerScriptService": {
       "Server": {
-        "$path": "src/village/server"
+        "$path": "src/village/server",
+        "KayakService": {
+          "$path": "src/server/Systems/KayakService.luau"
+        }
       }
     },
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "Client": {
-          "$path": "src/village/client"
+          "$path": "src/client",
+          "Village": {
+            "$path": "src/village/client"
+          }
         }
       }
     },
