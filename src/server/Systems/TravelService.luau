@@ -15,6 +15,8 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local TravelService = {}
 
+TravelService.onGiveUp = nil :: ((Player) -> ())? -- gracz zostaje na serwerze (RaceService cofa głos „Do wioski”)
+
 type Trip = { attempts: number, deadline: number }
 
 -- Gracze w drodze. Po deadline wolno kliknąć znowu: Roblox czasem nie zgłasza ani sukcesu, ani błędu.
@@ -39,6 +41,9 @@ function onFailed(player: Player)
 	if trip.attempts >= Config.TRAVEL_TRIES then
 		trips[player] = nil
 		Remotes.get("TravelNotice"):FireClient(player, "travel.failed")
+		if TravelService.onGiveUp then
+			TravelService.onGiveUp(player)
+		end
 		return
 	end
 	trip.attempts += 1
@@ -56,6 +61,9 @@ function TravelService.toVillage(player: Player)
 	end
 	if RunService:IsStudio() then
 		Remotes.get("TravelNotice"):FireClient(player, "travel.studio")
+		if TravelService.onGiveUp then
+			TravelService.onGiveUp(player)
+		end
 		return
 	end
 	trips[player] = { attempts = 1, deadline = os.clock() + Config.TRAVEL_TIMEOUT }

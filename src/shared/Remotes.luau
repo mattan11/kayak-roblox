@@ -20,10 +20,11 @@ local DEFINITIONS: { [string]: Kind } = {
 	RaceState = "reliable", -- serwer → wszyscy: (phase, phaseEndsAt) — czas z workspace:GetServerTimeNow()
 	RaceResults = "reliable", -- serwer → wszyscy: lista { userId, name, time }, kolejność = miejsce
 	Feedback = "reliable", -- klient → serwer: ocena wyścigu (stars 1..5) — Analytics
-	PierState = "reliable", -- serwer → wszyscy (wioska): (pierId, liczba graczy, koniec odliczania)
-	PierAction = "reliable", -- klient → serwer (wioska): ("leave" | "go", pierId)
+	QueueState = "reliable", -- serwer → wszyscy (wioska): (river, liczba, koniec odliczania, gotowi)
+	QueueAction = "reliable", -- klient → serwer (wioska): ("join", river) | ("leave") | ("ready")
 	TravelNotice = "reliable", -- serwer → gracz: klucz tekstu o podróży
 	RaceAction = "reliable", -- klient → serwer (spływ): "again" | "village"
+	RaceVotes = "reliable", -- serwer → wszyscy (spływ): (płyną dalej, do wioski, niezdecydowani)
 	PersonalBest = "reliable", -- serwer → gracz: (bestTime | nil, isNewRecord)
 }
 

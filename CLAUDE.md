@@ -1,6 +1,6 @@
-# River Riot: Kayak Race — instrukcja dla Claude
+# River Riders: Kayak Race — instrukcja dla Claude
 
-Mała gra Roblox „River Riot: Kayak Race” (wyścig kajaków). Właściciel: Marek — programista JS/TS, rozmawia po polsku. Odpowiedzi,
+Mała gra Roblox „River Riders: Kayak Race” (wyścig kajaków). Właściciel: Marek — programista JS/TS, rozmawia po polsku. Odpowiedzi,
 dokumenty i komentarze w kodzie **po polsku**, z analogiami do JS/TS tam, gdzie pomagają.
 
 - Start sesji: `PROGRESS.md` (sekcja „▶ NASTĘPNY KROK”), decyzje w `VISION.md`, płatności w `MONETIZATION.md` (nie sprzedajemy mocy).

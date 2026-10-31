@@ -36,6 +36,8 @@ function RaceLogic.new(startLine: number, finishLine: number)
 		expected = nil :: number?, -- ilu graczy wysłała wioska; nil = na nikogo nie czekamy
 		gatherEndsAt = nil :: number?, -- do kiedy czekamy na resztę grupy (liczone od pierwszego gracza)
 		againVotes = {} :: { [number]: boolean }, -- kto kliknął „Jeszcze raz”
+		leaving = {} :: { [number]: boolean }, -- kto kliknął „Do wioski” i jeszcze jest na serwerze
+		leftCount = 0, -- ilu odeszło z serwera od końca wyścigu
 	}, RaceLogic)
 end
 
@@ -55,6 +57,8 @@ function RaceLogic:_enter(phase: Phase, endsAt: number)
 	-- Głosy przeżywają przejście results → countdown: część osób klika dopiero w odliczaniu.
 	if phase == "racing" or phase == "waiting" then
 		self.againVotes = {}
+		self.leaving = {}
+		self.leftCount = 0
 	end
 end
 
@@ -81,16 +85,41 @@ function RaceLogic:voteAgain(id: number): boolean
 		return false
 	end
 	self.againVotes[id] = true
+	self.leaving[id] = nil
 	return true
+end
+
+-- „Do wioski”: każdy decyduje za siebie, głos tylko pokazuje innym, ile osób odpływa.
+function RaceLogic:voteLeave(id: number)
+	if self.phase == "results" or self.phase == "countdown" then
+		self.againVotes[id] = nil
+		self.leaving[id] = true
+	end
+end
+
+-- Teleport się nie udał: gracz zostaje i znów jest niezdecydowany.
+function RaceLogic:cancelLeave(id: number)
+	self.leaving[id] = nil
+end
+
+local function countKeys(set: { [number]: boolean }): number
+	local count = 0
+	for _ in set do
+		count += 1
+	end
+	return count
+end
+
+-- Stan decyzji do pokazania na ekranie wyników: (płyną dalej, do wioski, niezdecydowani).
+function RaceLogic:tally(playerCount: number): (number, number, number)
+	local again, leaving = countKeys(self.againVotes), countKeys(self.leaving)
+	return again, leaving + self.leftCount, math.max(playerCount - again - leaving, 0)
 end
 
 -- Czy wszyscy na serwerze kliknęli? Liczy tick, więc wyjście ostatniego niezdecydowanego też domyka głosowanie.
 function RaceLogic:_everyoneAgain(playerCount: number): boolean
-	local votes = 0
-	for _ in self.againVotes do
-		votes += 1
-	end
-	return votes >= playerCount
+	local votes = countKeys(self.againVotes)
+	return votes > 0 and votes + countKeys(self.leaving) >= playerCount
 end
 
 function RaceLogic:_allDone(): boolean
@@ -165,6 +194,10 @@ end
 -- Gracz wyszedł. Kto już dopłynął, zostaje w wynikach.
 function RaceLogic:remove(id: number)
 	self.againVotes[id] = nil
+	self.leaving[id] = nil
+	if self.phase == "results" or self.phase == "countdown" then
+		self.leftCount += 1
+	end
 	local racer = self.racers[id]
 	if racer and not racer.time then
 		self.racers[id] = nil

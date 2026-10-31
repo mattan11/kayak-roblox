@@ -62,6 +62,7 @@ local resultRows: { TextLabel } = {}
 local topTitle: TextLabel = nil
 local topRows: { TextLabel } = {}
 local againButton: TextButton = nil
+local votesLabel: TextLabel = nil
 local villageButton: TextButton = nil
 local noticeGroup: Frame = nil
 local noticeLabel: TextLabel = nil
@@ -279,6 +280,14 @@ end
 local function buildActions(parent: Frame)
 	againButton = actionButton(Texts.again, 14, COLORS.accent, parent)
 	villageButton = actionButton(Texts.toVillage, 14 + Config.UI_ACTION_WIDTH + 8, COLORS.fill, parent)
+	votesLabel = label({
+		Position = UDim2.new(0, 14, 1, -(Config.UI_BUTTON_HEIGHT + 36)),
+		Size = UDim2.new(1, -28, 0, 22),
+		TextSize = 16,
+		TextColor3 = COLORS.dim,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Text = "",
+	}, parent)
 
 	againButton.Activated:Connect(function()
 		if againButton.Active then
@@ -296,7 +305,7 @@ local function buildActions(parent: Frame)
 end
 
 local function buildPanel()
-	panel = group("Results", Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.52), UDim2.fromOffset(600, 330))
+	panel = group("Results", Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.52), UDim2.fromOffset(600, 356))
 	panel.BackgroundColor3 = COLORS.panel
 	panel.BackgroundTransparency = 0.12
 	panel.Visible = false
@@ -374,6 +383,18 @@ local function readTop()
 	return RaceFormat.parseTop(if ok then decoded else nil)
 end
 
+-- Ile osób zostaje, a ile odpływa. Solo nie ma czego pokazywać.
+local function showVotes(again: number, leaving: number, undecided: number)
+	local total = again + leaving + undecided
+	if total <= 1 then
+		votesLabel.Text = ""
+	elseif leaving > 0 and leaving == total - 1 and villageButton.Active then
+		votesLabel.Text = Texts.votesAlone
+	else
+		votesLabel.Text = string.format(Texts.votes, again, leaving, undecided)
+	end
+end
+
 local function showResults(rows: { any })
 	local ownId = player.UserId
 	local shown = 0
@@ -403,6 +424,7 @@ local function showResults(rows: { any })
 
 	panelTitle.Text = if isNewRecord then Texts.resultsTitleRecord else Texts.resultsTitle
 	resetActions()
+	votesLabel.Text = ""
 	panel.Visible = true
 end
 
@@ -549,6 +571,7 @@ function HudController.start()
 
 	Remotes.get("TravelNotice").OnClientEvent:Connect(showNotice)
 	Remotes.get("RaceResults").OnClientEvent:Connect(showResults)
+	Remotes.get("RaceVotes").OnClientEvent:Connect(showVotes)
 	Remotes.get("PersonalBest").OnClientEvent:Connect(function(best: number?, newRecord: boolean?)
 		recordLabel.Text = if best then string.format(Texts.record, RaceFormat.time(best)) else Texts.noRecord
 		if newRecord then

@@ -41,3 +41,8 @@ wszystkich, dzięki czemu rekordy, medale i rankingi coś znaczą.
 
 Przychód zależy głównie od liczby graczy. Tu najważniejsza jest nauka przed Anchorfall. Dostęp młodszych graczy może być
 ograniczony (`PUBLISHING.md`), co wpłynie na wyniki.
+
+## Turnieje (decyzja Marka 2026-10-31, plan w `TOURNAMENTS.md`)
+
+Bez wpisowego i bez nagród w Robuxach: to najbardziej ryzykowny układ wobec zasad Roblox. Turnieje darmowe, z nagrodami
+tylko w grze (wygląd, odznaka, miejsce na tablicy). Przed wdrożeniem sprawdzić aktualne Community Standards.

@@ -1,15 +1,16 @@
--- Świat wioski: teren z jeziorem, światło, domki, drzewa, ognisko, pomosty, miejsce pojawienia. Wszystko powstaje raz, w init().
--- Układ: jezioro na północy (−Z), pomosty łukiem na jego południowym brzegu, plac z ogniskiem i domki na lądzie (+Z).
+-- Świat wioski: teren z jeziorem, światło, domki, drzewa, ognisko, pomost, tablice, miejsce pojawienia. Wszystko powstaje raz, w init().
+-- Układ: jezioro na północy (−Z), jeden szeroki pomost na jego południowym brzegu (x = 0) z planszą rzek przy wejściu,
+-- plac z ogniskiem i tablicą wyników oraz domki na lądzie (+Z).
 -- W przeciwieństwie do spływu postać chodzi tu po świecie, więc teren, domki, pnie i deski mają kolizje.
--- Inne systemy biorą stąd tylko workspace.Piers: strefy `QueueZone` z atrybutem `PierId`. (Dla TS: moduł z efektem ubocznym
--- `init()`, który buduje „DOM” raz przy starcie.)
+-- Inne systemy biorą stąd tylko workspace.Piers (jedna strefa `QueueZone`) i workspace.Boards.ResultsBoard (RiverBoards dopisuje
+-- na niej wyniki). (Dla TS: moduł z efektem ubocznym `init()`, który buduje „DOM” raz przy starcie.)
 
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
-local Piers = require(Shared:WaitForChild("content"):WaitForChild("Piers"))
+local RiverCatalog = require(Shared:WaitForChild("content"):WaitForChild("RiverCatalog"))
 
 local VillageWorld = {}
 
@@ -23,7 +24,7 @@ local BEACH_LOW = 1.5 -- plaża schodzi do wody dwoma stopniami, które wygładz
 local BEACH_HIGH = 3
 
 local LAKE_CENTER = Vector3.new(0, 0, Config.VILLAGE_LAKE_Z)
-local CAMPFIRE = Vector3.new(0, GROUND_TOP, Config.VILLAGE_SPAWN_Z - 20)
+local CAMPFIRE = Vector3.new(Config.VILLAGE_CAMPFIRE_X, GROUND_TOP, Config.VILLAGE_CAMPFIRE_Z)
 local PLAZA_CENTER = Vector3.new(0, 0, Config.VILLAGE_SPAWN_Z - 12)
 local PLAZA_RADIUS = 24
 local PATH_WIDTH = 10
@@ -41,9 +42,18 @@ local PLANK_COLOR = Color3.fromRGB(148, 110, 72)
 local POST_COLOR = Color3.fromRGB(84, 64, 48)
 local STONE_COLOR = Color3.fromRGB(112, 112, 116)
 local WINDOW_COLOR = Color3.fromRGB(150, 196, 214)
+local BOARD_COLOR = Color3.fromRGB(28, 40, 48)
+local TEXT_COLOR = Color3.fromRGB(245, 245, 240)
+local MUTED_COLOR = Color3.fromRGB(150, 164, 170)
+local TITLE_COLOR = Color3.fromRGB(255, 206, 84)
+local DIFFICULTY_COLORS = {
+	["Łatwa"] = Color3.fromRGB(98, 196, 126),
+	["Średnia"] = Color3.fromRGB(236, 172, 72),
+	["Trudna"] = Color3.fromRGB(232, 96, 84),
+}
 local LEAF_COLORS = { Color3.fromRGB(70, 128, 62), Color3.fromRGB(88, 145, 60), Color3.fromRGB(58, 112, 72) }
 
--- Domki stoją frontem do ogniska. Układ na oko, z dala od pomostów.
+-- Domki stoją frontem do placu. Układ na oko, z dala od pomostu.
 local HOUSES = {
 	{ x = -70, z = 88, wall = Color3.fromRGB(196, 168, 128), roof = Color3.fromRGB(150, 74, 56) },
 	{ x = 70, z = 88, wall = Color3.fromRGB(176, 144, 110), roof = Color3.fromRGB(84, 96, 112) },
@@ -182,7 +192,7 @@ end
 local function buildHouse(parent: Instance, house: any)
 	local width, depth, height = 16, 12, 9
 	local position = Vector3.new(house.x, GROUND_TOP, house.z)
-	local base = CFrame.lookAt(position, Vector3.new(CAMPFIRE.X, GROUND_TOP, CAMPFIRE.Z))
+	local base = CFrame.lookAt(position, Vector3.new(PLAZA_CENTER.X, GROUND_TOP, PLAZA_CENTER.Z))
 	solid(parent, Vector3.new(width, height + 1, depth), base * CFrame.new(0, height / 2 - 0.5, 0), house.wall, Enum.Material.WoodPlanks, true)
 
 	local roofSide = (depth + 2) / math.sqrt(2)
@@ -233,7 +243,7 @@ local function pineTree(parent: Instance, base: Vector3, height: number, random:
 	end
 end
 
--- Czy w tym miejscu może stać drzewo: nie na plaży, nie na podejściu do pomostów, nie na placu ani w domku.
+-- Czy w tym miejscu może stać drzewo: nie na plaży, nie na podejściu do pomostu, nie na placu ani w domku.
 local function treeFits(spot: Vector3): boolean
 	local fromLake = (spot - Vector3.new(LAKE_CENTER.X, spot.Y, LAKE_CENTER.Z)).Magnitude
 	local shore = Config.VILLAGE_LAKE_RADIUS + Config.VILLAGE_BEACH_WIDTH
@@ -309,45 +319,93 @@ local function buildCampfire(parent: Instance)
 	end
 end
 
--- ── Pomosty ─────────────────────────────────────────────────────────────────────────────────────────────
+-- ── Tablice ─────────────────────────────────────────────────────────────────────────────────────────────
 
--- Tablica nad wejściem na pomost: dwa słupy i deska z napisem od strony lądu. Przechodzi się pod nią.
-local function buildSign(parent: Instance, frame: CFrame, pier: any)
-	local reach = Config.PIER_WIDTH / 2 + 0.6
-	local height = 11
-	local deck = Config.PIER_DECK_Y
+-- Wspólna bryła obu tablic: dwa słupy, belka i deska zwrócona do punktu `facing`. Zwraca deskę, napis to SurfaceGui na jej froncie.
+-- Słupy mają kolizję, a deska jest ponad głowami. Słupy wchodzą w ziemię, bo plaża schodzi stopniami do wody.
+local function buildBoard(parent: Instance, name: string, x: number, z: number, width: number, height: number, facing: Vector3): Part
+	local center = Vector3.new(x, GROUND_TOP + Config.VILLAGE_BOARD_CLEARANCE + height / 2, z)
+	local frame = CFrame.lookAt(center, Vector3.new(facing.X, center.Y, facing.Z))
+	local board = decoration(parent, Vector3.new(width, height, 0.6), frame, POST_COLOR, Enum.Material.WoodPlanks, true)
+	board.Name = name
+
+	local postHeight = height + Config.VILLAGE_BOARD_CLEARANCE + 4
 	for _, side in { -1, 1 } do
-		decoration(parent, Vector3.new(0.8, height + 3, 0.8), frame * CFrame.new(side * reach, deck + height / 2 - 1.5, -1), POST_COLOR, Enum.Material.Wood, true)
+		local offset = CFrame.new(side * (width / 2 - 2), height / 2 - postHeight / 2 + 1, 0.7)
+		solid(parent, Vector3.new(1, postHeight, 1), frame * offset, POST_COLOR, Enum.Material.Wood, true)
 	end
-	-- frame patrzy w wodę, a napis ma patrzeć na ląd: obrót o 180°, front deski (−Z) wskazuje plażę.
-	local boardFrame = frame * CFrame.new(0, deck + height - 1, -1) * CFrame.Angles(0, math.pi, 0)
-	local board = decoration(parent, Vector3.new(reach * 2 + 2, 5, 0.5), boardFrame, pier.color, Enum.Material.WoodPlanks, true)
+	decoration(parent, Vector3.new(width + 1.5, 0.8, 1.4), frame * CFrame.new(0, height / 2 + 0.4, 0.2), PLANK_COLOR, Enum.Material.WoodPlanks, true)
+	return board
+end
 
+-- Napis na planszy rzek: tytuł i po jednym wierszu na rzekę. Lista stała, więc wystarczy ją złożyć raz.
+local function buildRiverList(board: Part)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 20
+	gui.PixelsPerStud = Config.VILLAGE_BOARD_PIXELS
 	gui.LightInfluence = 0
-	local function line(text: string, top: number, share: number)
+
+	local background = Instance.new("Frame")
+	background.Size = UDim2.fromScale(1, 1)
+	background.BackgroundColor3 = BOARD_COLOR
+	background.BorderSizePixel = 0
+	background.Parent = gui
+
+	local function line(text: string, x: number, y: number, width: number, height: number, color: Color3, align: Enum.TextXAlignment, font: Enum.Font)
 		local label = Instance.new("TextLabel")
-		label.Position = UDim2.fromScale(0.05, top)
-		label.Size = UDim2.fromScale(0.9, share)
+		label.Position = UDim2.fromScale(x, y)
+		label.Size = UDim2.fromScale(width, height)
 		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.GothamBlack
+		label.Font = font
 		label.TextScaled = true
-		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextColor3 = color
+		label.TextXAlignment = align
 		label.Text = text
-		label.Parent = gui
+		label.Parent = background
 	end
-	line(pier.label, 0.08, 0.54)
-	line(pier.difficulty, 0.64, 0.28)
+
+	line("Rzeki", 0.05, 0.03, 0.9, 0.15, TITLE_COLOR, Enum.TextXAlignment.Center, Enum.Font.GothamBlack)
+	line("Wejdź na pomost i wybierz", 0.05, 0.18, 0.9, 0.07, TEXT_COLOR, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
+	local top, height = 0.28, 0.69 / #RiverCatalog
+	for index, entry in RiverCatalog do
+		local y = top + (index - 1) * height + height * 0.1
+		local nameColor = if entry.available then TEXT_COLOR else MUTED_COLOR
+		line(entry.label, 0.06, y, 0.56, height * 0.8, nameColor, Enum.TextXAlignment.Left, Enum.Font.GothamBold)
+		line(entry.difficulty, 0.64, y, 0.3, height * 0.8, DIFFICULTY_COLORS[entry.difficulty], Enum.TextXAlignment.Right, Enum.Font.GothamBold)
+	end
 	gui.Parent = board
 end
 
+local function buildBoards(parent: Instance)
+	local riverBoard = buildBoard(
+		parent,
+		"RiverBoard",
+		Config.VILLAGE_RIVER_BOARD_X,
+		Config.VILLAGE_RIVER_BOARD_Z,
+		Config.VILLAGE_RIVER_BOARD_WIDTH,
+		Config.VILLAGE_RIVER_BOARD_HEIGHT,
+		PLAZA_CENTER -- na wprost idącego z placu do pomostu
+	)
+	buildRiverList(riverBoard)
+
+	buildBoard(
+		parent,
+		"ResultsBoard",
+		Config.VILLAGE_RESULTS_BOARD_X,
+		Config.VILLAGE_RESULTS_BOARD_Z,
+		Config.VILLAGE_RESULTS_BOARD_WIDTH,
+		Config.VILLAGE_RESULTS_BOARD_HEIGHT,
+		Vector3.new(0, 0, Config.VILLAGE_SPAWN_Z) -- napis ma być czytelny od razu po pojawieniu się
+	)
+end
+
+-- ── Pomost ──────────────────────────────────────────────────────────────────────────────────────────────
+
 -- Kajak-ozdoba przy pomoście. Kadłub to spłaszczona kula (SpecialMesh), więc ma ostre końce przy jednej części.
-local function buildKayak(parent: Instance, frame: CFrame, color: Color3)
-	local side = Config.PIER_WIDTH / 2 + 2.5
-	local moored = frame * CFrame.new(side, Config.KAYAK_RIDE_Y, -Config.PIER_LENGTH * 0.55) * CFrame.Angles(0, 0.08, 0)
+local function buildKayak(parent: Instance, frame: CFrame, sideSign: number, color: Color3)
+	local side = sideSign * (Config.PIER_WIDTH / 2 + 2.5)
+	local moored = frame * CFrame.new(side, Config.KAYAK_RIDE_Y, -Config.PIER_LENGTH * 0.55) * CFrame.Angles(0, sideSign * 0.08, 0)
 	local hull = decoration(parent, Vector3.new(2.4, 1.2, 9), moored, color, Enum.Material.SmoothPlastic, true)
 	local shape = Instance.new("SpecialMesh")
 	shape.MeshType = Enum.MeshType.Sphere
@@ -362,9 +420,10 @@ local function buildKayak(parent: Instance, frame: CFrame, color: Color3)
 	end
 end
 
--- Deski w poprzek, słupy w wodzie. Zaślepka („Wkrótce”) to krótki początek pomostu, bez kajaka i bez strefy.
-local function buildDock(parent: Instance, frame: CFrame, length: number, random: Random)
+-- Deski w poprzek, słupy w wodzie.
+local function buildDock(parent: Instance, frame: CFrame, random: Random)
 	local width = Config.PIER_WIDTH
+	local length = Config.PIER_LENGTH
 	local spacing = Config.PIER_PLANK_SPACING
 	local y = Config.PIER_DECK_Y - 0.2
 	local planks = math.floor(length / spacing)
@@ -382,8 +441,8 @@ local function buildDock(parent: Instance, frame: CFrame, length: number, random
 	end
 end
 
--- Strefa kolejki nad deskami, poza samym wejściem. Bezpośrednio w workspace.Piers: folder ma tylko strefy.
-local function buildQueueZone(parent: Instance, frame: CFrame, pierId: string)
+-- Strefa kolejki nad deskami, poza samym wejściem. Bezpośrednio w workspace.Piers: folder ma tylko tę strefę.
+local function buildQueueZone(parent: Instance, frame: CFrame)
 	local start = Config.PIER_QUEUE_START
 	local length = Config.PIER_LENGTH - start
 	local height = 8
@@ -396,20 +455,17 @@ local function buildQueueZone(parent: Instance, frame: CFrame, pierId: string)
 	zone.Transparency = 1
 	zone.Size = Vector3.new(Config.PIER_WIDTH, height, length)
 	zone.CFrame = frame * CFrame.new(0, Config.PIER_DECK_Y + height / 2 - 0.5, -(start + length / 2))
-	zone:SetAttribute("PierId", pierId)
 	zone.Parent = parent
 end
 
-local function buildPier(zones: Instance, docks: Instance, pier: any, random: Random)
-	local origin = Vector3.new(pier.position.X, 0, pier.position.Y)
-	local frame = CFrame.lookAt(origin, origin + Vector3.new(pier.direction.X, 0, pier.direction.Y))
-	local isOpen = pier.river ~= nil
-	buildDock(docks, frame, if isOpen then Config.PIER_LENGTH else Config.PIER_STUB_LENGTH, random)
-	buildSign(docks, frame, pier)
-	if isOpen then
-		buildKayak(docks, frame, pier.color)
-		buildQueueZone(zones, frame, pier.id)
-	end
+-- Jeden pomost na osi x = 0: początek na plaży, kierunek prosto na środek jeziora (−Z).
+local function buildPier(zones: Instance, docks: Instance, random: Random)
+	local origin = Vector3.new(0, 0, LAKE_CENTER.Z + Config.VILLAGE_LAKE_RADIUS + Config.PIER_START_ON_BEACH)
+	local frame = CFrame.lookAt(origin, Vector3.new(0, 0, LAKE_CENTER.Z))
+	buildDock(docks, frame, random)
+	buildKayak(docks, frame, 1, DIFFICULTY_COLORS["Łatwa"])
+	buildKayak(docks, frame, -1, DIFFICULTY_COLORS["Trudna"])
+	buildQueueZone(zones, frame)
 end
 
 -- ── Granice i pojawianie się ────────────────────────────────────────────────────────────────────────────
@@ -448,11 +504,8 @@ function VillageWorld.init()
 	buildTrees(folder("Trees"), random)
 	buildCampfire(folder("Campfire"))
 
-	local zones = folder("Piers")
-	local docks = folder("Docks")
-	for _, pier in Piers do
-		buildPier(zones, docks, pier, random)
-	end
+	buildPier(folder("Piers"), folder("Docks"), random)
+	buildBoards(folder("Boards"))
 
 	buildBounds(folder("Bounds"))
 	buildSpawn()

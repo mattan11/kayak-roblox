@@ -156,12 +156,25 @@ local Config = {
 	FEEDBACK_ENABLED = true, -- gwiazdki po wyścigu
 
 	-- Interfejs
+	QUEUE_CONFIRM_TIME = 4, -- jak długo klient czeka na potwierdzenie dołączenia do kolejki
 	UI_NOTICE_TIME = 4, -- jak długo widać komunikat o podróży
 	UI_BUTTON_HEIGHT = 48, -- wysokość dużych przycisków (w pikselach projektu HUD)
 	UI_ACTION_WIDTH = 130, -- szerokość przycisków na ekranie wyników
 	PIER_PANEL_WIDTH = 290,
 	PIER_PANEL_LEFT = 0.42, -- lewa krawędź panelu pomostu (ułamek szerokości): gałka ruchu po lewej, skok po prawej
 	PIER_PANEL_SCALE_MAX = 1.3, -- niższe niż HUD_SCALE_MAX, żeby na tablecie panel nie wjechał pod przycisk skoku
+	PICKER_OPEN_HEIGHT = 58, -- wysokość przycisku „Wybierz rzekę”
+	PICKER_COLUMNS = 4, -- kafelki w rzędzie
+	PICKER_ROWS = 2, -- rzędy widoczne bez przewijania
+	PICKER_TILE_WIDTH = 172,
+	PICKER_TILE_HEIGHT = 146,
+	PICKER_TILE_GAP = 8,
+	PICKER_THUMB_HEIGHT = 96, -- miniaturka rzeki na górze kafelka
+	PICKER_THUMB_PADDING = 8, -- margines wewnątrz miniaturki
+	PICKER_THUMB_SEGMENTS = 28, -- Frame'ów na rzekę; 7 rzek to niecałe 200 Frame'ów, tworzonych raz
+	PICKER_THUMB_LINE = 4, -- grubość linii rzeki
+	PICKER_THUMB_DOT = 9, -- średnica kropki wodospadu
+	PICKER_THUMB_STRETCH = 3, -- rzeki są długie i wąskie: oś poprzeczna może urosnąć tyle razy
 
 	-- Wioska
 	VILLAGE_SIZE = 300, -- bok kwadratu terenu
@@ -171,21 +184,51 @@ local Config = {
 	VILLAGE_BEACH_WIDTH = 16,
 	VILLAGE_SPAWN_Z = 110, -- miejsce pojawienia (x = 0), po stronie lądu
 	VILLAGE_TREES = 32,
+	VILLAGE_CAMPFIRE_X = -16, -- ognisko z boku placu, poza drogą ze spawnu na pomost (x = 0)
+	VILLAGE_CAMPFIRE_Z = 96,
+	VILLAGE_BOARD_CLEARANCE = 3, -- dolna krawędź tablic nad ziemią
+	VILLAGE_BOARD_PIXELS = 25, -- gęstość SurfaceGui na tablicach (pikseli na stud)
+	VILLAGE_RIVER_BOARD_X = -18, -- plansza rzek: przy wejściu na pomost, po lewej
+	VILLAGE_RIVER_BOARD_Z = 74,
+	VILLAGE_RIVER_BOARD_WIDTH = 24,
+	VILLAGE_RIVER_BOARD_HEIGHT = 18,
+	VILLAGE_RESULTS_BOARD_X = 18, -- tablica wyników: na placu, po prawej, widać ją od spawnu
+	VILLAGE_RESULTS_BOARD_Z = 86,
+	VILLAGE_RESULTS_BOARD_WIDTH = 28,
+	VILLAGE_RESULTS_BOARD_HEIGHT = 20,
+	RESULTS_ROTATE_TIME = 6, -- co tyle s tablica pokazuje następną rzekę
+	RESULTS_REFRESH_TIME = 60, -- co tyle s nowy odczyt rankingów
 	PIER_START_ON_BEACH = 14, -- początek pomostu tyle od brzegu wody
 	PIER_LENGTH = 38,
-	PIER_STUB_LENGTH = 16, -- zaślepka „Wkrótce”
-	PIER_WIDTH = 7,
+	PIER_WIDTH = 14, -- jeden szeroki pomost: mieści całą kolejkę
 	PIER_PLANK_SPACING = 2.1,
 	PIER_DECK_Y = 2.6, -- wierzch desek, trochę poniżej górnego stopnia plaży
 	PIER_QUEUE_START = 8, -- strefa kolejki zaczyna się tyle od początku pomostu
 
 	-- Podróż
 	PIER_CAPACITY = 8, -- limit graczy na pomoście i w wyścigu (VISION.md)
-	PIER_COUNTDOWN = 30, -- odliczanie od pierwszej osoby
-	PIER_FULL_COUNTDOWN = 5, -- przy komplecie skraca się do tylu sekund
+	PIER_COUNTDOWN = 30, -- najstarszy bilet czeka najwyżej tyle
 	PIER_SCAN_INTERVAL = 0.25, -- co ile s serwer sprawdza, kto stoi w strefie kolejki
+	MATCH_TICKET_PREFIX = "Tickets_", -- MemoryStore: mapa biletów rzeki (klucz = userId)
+	MATCH_TICKET_TTL = 60, -- bilet wygasa po tylu s bez odnowienia (serwer padł)
+	MATCH_TICKET_RENEW = 10, -- co ile s serwer gracza odnawia bilet
+	MATCH_LEADER_MAP = "MatchLeader", -- MemoryStore: mapa z blokadą lidera
+	MATCH_LEADER_TTL = 10, -- blokada wygasa po tylu s bez odnowienia
+	MATCH_LEADER_RENEW = 3, -- co ile s serwery próbują wziąć albo odnowić blokadę
+	MATCH_TICK = 2, -- co ile s lider rozdziela grupy i publikuje QueueState
+	MATCH_RANGE = 200, -- bilety czytane na rzekę (limit GetRangeAsync)
+	MATCH_TOPIC = "Match", -- MessagingService: grupa gotowa
+	QUEUE_STATE_TOPIC = "QueueState", -- MessagingService: stan kolejek od lidera
+	MATCH_PUBLISH_TIMES = 2, -- Match idzie tyle razy, bo dostawa nie jest gwarantowana
+	MATCH_PUBLISH_GAP = 2, -- odstęp między wysyłkami
+	MATCH_TAKEN_TIMEOUT = 15, -- bilet zabrany, a Match nie doszedł: po tylu s gracz dostaje travel.failed
+	MATCH_JOIN_COOLDOWN = 2, -- najmniejszy odstęp między dołączeniami gracza (każde to zapis w MemoryStore)
+	MATCH_FAIL_LIMIT = 3, -- tyle błędów MemoryStore z rzędu włącza tryb lokalny
+	MATCH_PROBE_INTERVAL = 30, -- w trybie lokalnym co tyle s sprawdzamy, czy MemoryStore wrócił
+	MATCH_WARN_INTERVAL = 30, -- ten sam błąd usługi ostrzega najwyżej raz na tyle s
 	TRAVEL_TRIES = 3, -- prób teleportu (ARCHITECTURE.md)
 	TRAVEL_RETRY_WAIT = 2, -- odstęp między próbami
+	TRAVEL_FLOOD_WAIT = 6, -- odstęp po wyniku Flooded (za dużo teleportów naraz)
 	TRAVEL_TIMEOUT = 30, -- po tylu s bez wieści od Robloxa uznajemy, że gracz nie odleciał
 	RACE_TICKET_MAP = "Races", -- MemoryStore: wpisy wyścigów (klucz = privateServerId)
 	RACE_TICKET_TTL = 600, -- wpis wygasa po 10 min

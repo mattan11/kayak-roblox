@@ -1,4 +1,6 @@
-# River Riot: Kayak Race — wizja (folder `roblox-kayak`)
+# River Riders: Kayak Race — wizja (folder `roblox-kayak`)
+
+Po polsku tytuł w Roblox: **River Riders: Wyścig Kajaków** (ustawić ręcznie, bez automatycznego tłumaczenia).
 
 Prosta gra Roblox na krótkie rundy: wyścig kajaków w dół rzeki, solo albo ze znajomymi. Przyjazna telefonom.
 Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
@@ -21,11 +23,11 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
 
 - **Dwa miejsca:** wioska (spotkania, wybór rzeki) i jedno miejsce „Spływ”. Rzeki to pliki danych, serwer spływu wczytuje
   wybraną i buduje teren przy starcie. Nowa rzeka nie wymaga nowego miejsca. Do zmierzenia: czas budowy terenu po teleporcie.
-- **Pomost = lobby:** wejście na pomost rzeki to kolejka („3/8, start za 25 s”). Odliczanie ok. 30 s rusza z pierwszą osobą,
-  przy komplecie skraca się do 5 s. Przycisk „Płyń teraz” pozwala ruszyć od razu, także solo.
+- **Pomost = lobby:** jeden pomost z planszą rzek; wybór rzeki to kolejka między serwerami („3/8, start za 25 s”). Odliczanie ok. 30 s rusza z pierwszą osobą,
+  a komplet startuje od razu. Przycisk „Płyń teraz” to głos: rusza, gdy kliknie cała kolejka, a solo od razu.
 - **Teleport grupy:** wioska tworzy serwer zarezerwowany (`ReserveServer`) i przenosi cały pomost. Na spływie spotykają się
   gracze z tej samej wioski. Globalne dobieranie (MemoryStore) dopiero, gdy dane pokażą wiele wiosek z pustymi pomostami.
-- **Po wyścigu:** ekran wyników daje „Jeszcze raz” (ta sama grupa, bez ładowania) i „Do wioski”.
+- **Po wyścigu:** każdy decyduje za siebie: „Jeszcze raz” (ta sama grupa, bez ładowania) albo „Do wioski”. Licznik pokazuje, ile osób płynie dalej, wraca i się waha. Brak decyzji = zostaje.
 - **Znajomi:** ten sam pomost. Zaproszony trafia najpierw do wioski.
 - **Liczba graczy:** limit 8 na wyścig; 10 po teście na telefonie.
 - **Bezpieczeństwo i błędy:** wybór rzeki po stronie serwera (np. MemoryStore pod identyfikatorem serwera), nie przez dane
@@ -49,7 +51,7 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
   - Przedmioty rozstrzyga serwer: klient prosi o użycie, serwer sprawdza posiadanie, zasięg i czas odnowienia, a dopiero
     potem wysyła skutek do kajaka ofiary (fizykę liczy jej urządzenie).
   - Skrzynki to dane rzeki, więc tryb działa na każdej trasie.
-- **Kolejność całości:** wioska i teleport → „Jeszcze raz” → duchy → pozostałe stałe rzeki → waluta, kosmetyki, skarby (`MONETIZATION.md`) → tryb Bitwa → Rzeka tygodnia.
+- **Kolejność całości:** wioska 2.0 i kolejka → medale → duchy → tryb Bitwa (**wymagany przed publiczną premierą**, decyzja Marka 2026-10-31) → pozostałe stałe rzeki → waluta, kosmetyki, skarby (`MONETIZATION.md`, plan w `COSMETICS.md`) → Rzeka tygodnia → turnieje (`TOURNAMENTS.md`).
 
 ## Monetyzacja
 

@@ -26,6 +26,7 @@ local hints: { [number]: number } = {} -- userId → ostatni odcinek rzeki (szyb
 local raceState = Remotes.get("RaceState")
 local raceResults = Remotes.get("RaceResults")
 local resetEvent = Remotes.get("Reset")
+local raceVotes = Remotes.get("RaceVotes")
 
 -- Stawia gracza na kolejnym wolnym miejscu startowym i zapisuje go do wyścigu.
 local function enroll(player: Player, now: number)
@@ -101,6 +102,7 @@ local function onRaceAction(player: Player, action: any)
 	if action == "again" then
 		race:voteAgain(player.UserId)
 	elseif action == "village" then
+		race:voteLeave(player.UserId)
 		TravelService.toVillage(player)
 	end
 end
@@ -112,6 +114,9 @@ function RaceService.init()
 		race:expectPlayers(RiverBuilder.expected)
 	end
 	Remotes.onServer("RaceAction", 2, 4, onRaceAction)
+	TravelService.onGiveUp = function(player)
+		race:cancelLeave(player.UserId)
+	end
 end
 
 function RaceService.start()
@@ -126,6 +131,7 @@ function RaceService.start()
 	end)
 
 	local sentPhase, sentEndsAt = race.phase, race.phaseEndsAt
+	local sentVotes = ""
 	while true do
 		task.wait(Config.RACE_SAMPLE_INTERVAL)
 		local now = workspace:GetServerTimeNow()
@@ -140,6 +146,17 @@ function RaceService.start()
 		end
 		if changed then
 			onPhase(changed, now)
+		end
+		-- Licznik decyzji tylko po zmianie, jak RaceState.
+		if race.phase == "results" or race.phase == "countdown" then
+			local again, leaving, undecided = race:tally(#Players:GetPlayers())
+			local votes = `{again}/{leaving}/{undecided}`
+			if votes ~= sentVotes then
+				sentVotes = votes
+				raceVotes:FireAllClients(again, leaving, undecided)
+			end
+		else
+			sentVotes = ""
 		end
 	end
 end

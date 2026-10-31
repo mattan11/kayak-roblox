@@ -2,16 +2,34 @@
 
 ## ▶ NASTĘPNY KROK (stan na koniec 2026-10-30)
 
-River Riot: Kayak Race. Dwa miejsca działają osobno w Studio. Testy Lune: 104. **Nic nie jest zacommitowane.**
+Wioska 2.0 (jeden pomost, plansza, okno z miniaturkami, tablica wyników, kolejka między serwerami) działa w Play w trybie lokalnym, 2026-10-31. Prawdziwy MemoryStore, MessagingService i teleport czekają na publikację. Testy Lune: 129.
+
+**Przed publiczną premierą:** tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
+
+**Najpierw:** teleport wioska → spływ na dwóch kontach: komputer przeszedł, a telefon się nie połączył i Marek dostał **kod błędu 2**
+przy teleporcie. Sprawdzić: czy błąd był na telefonie, F9 → Server (linie `[Pier]`) oraz logi telefonu. ADB zawiesiło się przy
+zrzucie i `logcat` (timeout), więc najpierw `adb devices`, bez `logcat -d` z potokiem. Wcześniej raz pojawił się też komunikat „Nie udało się
+wypłynąć” bez znanej przyczyny, więc to może być ten sam problem. Podejrzany: przestarzała para `ReserveServerAsync` +
+`ReservedServerAccessCode`; dokumentacja zaleca `TeleportOptions.ReservedServerId` = GUID (`reserve()` w PierService).
+Sprawdzić też, czy gracz, który nie dotarł, nie blokuje czekania na grupę (`expected`, limit 15 s).
+
+**Niezacommitowane:** poprawka gałki, głosowanie „Płyń teraz”, licznik decyzji po wyścigu. Marek jeszcze nie zgodził się na commit.
+Licznik nie był testowany z prawdziwymi graczami; wymaga publikacji obu miejsc.
+
+River Riders: Kayak Race. Dwa miejsca działają osobno w Studio. Testy Lune: 129. **Nic nie jest zacommitowane.**
 
 Sprawdzone w Play: wioska (teren, pomosty, chodzenie), panel kolejki, „Płyń teraz” z komunikatem Studio, start spływu
 i wyboru rzeki (fallback), „Do wioski” z komunikatem Studio.
 
+Potwierdzone przez Marka po publikacji: teleport z pomostu, głosowanie „Płyń teraz” na dwóch kontach, zderzenia kajaków, „Jeszcze raz”; na telefonie gra się lepiej niż na komputerze. Pierwsza próba teleportu raz zawiodła, przyczyna nieznana.
+
 Do sprawdzenia:
-1. Publikacja obu miejsc i test teleportu (2 konta): serwer zarezerwowany, MemoryStore, wybór rzeki, czekanie na grupę.
+1. Czy pomost prowadzi na właściwą rzekę (MemoryStore), czekanie na grupę.
    `ReserveServerAsync` jest w dokumentacji oznaczone jako przestarzałe; gdyby zawiodło, zmiana w `reserve()` w PierService.
 2. Ekran wyników z przyciskami „Jeszcze raz” i „Do wioski” (nieoglądany), przelot przez wodospad, kamera w kanionie.
 3. Spokojna rzeka w Play po zmianach, wyścig kilku graczy, telefon (ADB), zapis rekordu na żywo.
+
+Telefon: gałka w wiosce wraca po powrocie z rzeki (wioska przywraca `TouchControlsEnabled`), potwierdzone przez Marka 2026-10-30.
 
 Znane drobiazgi: dziewiąta osoba na pełnym pomoście widzi „8/8”, a „Płyń teraz” nic nie daje; ponawianie teleportu jest
 w dwóch miejscach; nazwy pomostów są robocze. Przy zmianie miejsca Rojo zostawia stare skrypty: usunąć je ręcznie w Edit.

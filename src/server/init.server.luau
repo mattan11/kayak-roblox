@@ -33,4 +33,4 @@ for _, system in systems do
 	end
 end
 
-print("[Server] River Riot: spływ gotowy")
+print("[Server] River Riders: spływ gotowy")

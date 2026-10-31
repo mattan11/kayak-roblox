@@ -28,6 +28,8 @@ return {
 	feedbackAsk = "Jak się grało?",
 	feedbackThanks = "Dzięki!",
 
+	votes = "Płyną dalej: %d · Do wioski: %d · Decydują: %d",
+	votesAlone = "Zostajesz sam: reszta wraca do wioski",
 	again = "Jeszcze raz",
 	againWaiting = "Czekamy…",
 	toVillage = "Do wioski",
