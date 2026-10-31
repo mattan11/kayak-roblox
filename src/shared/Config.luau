@@ -233,6 +233,7 @@ local Config = {
 	VILLAGE_NOTICE_TOP = 80, -- komunikat o podróży pod tym przyciskiem
 	RESULTS_ROTATE_TIME = 6, -- co tyle s tablica pokazuje następną rzekę
 	RESULTS_REFRESH_TIME = 60, -- co tyle s nowy odczyt rankingów
+	TUTORIAL_ALWAYS = true, -- TYMCZASOWO do testów: nauka przy każdym wejściu. Przed premierą false (tylko nowi gracze)
 	TUTORIAL_TICK = 0.1, -- co ile s nauka odczytuje pozycję kajaka
 	TUTORIAL_TURN_ANGLE = 0.35, -- krok „skręć”: tyle radianów w dobrą stronę (ok. 20°)
 	TUTORIAL_STRAIGHT_DISTANCE = 30, -- krok „płyń prosto”: tyle studs od punktu startu kroku

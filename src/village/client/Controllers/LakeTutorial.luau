@@ -26,9 +26,8 @@ local DONE_ATTRIBUTE = "TutorialDone"
 local LOADED_ATTRIBUTE = "SettingsLoaded"
 local REALISTIC_ATTRIBUTE = "RealisticPaddle"
 
-local PANEL_WIDTH = 360
-local PANEL_HEIGHT = 140
-local PANEL_TOP = 76 -- poniżej przycisku „Wybierz rzekę”, w pikselach projektu
+local PANEL_WIDTH = 270
+local PANEL_HEIGHT = 84
 local COLORS = {
 	text = Color3.fromRGB(245, 248, 250),
 	accent = Color3.fromRGB(255, 196, 70),
@@ -289,7 +288,7 @@ local function updateScale()
 	local camera = workspace.CurrentCamera
 	if camera then
 		scale.Scale = math.min(camera.ViewportSize.Y / Config.HUD_DESIGN_HEIGHT, Config.PIER_PANEL_SCALE_MAX)
-		panel.Position = UDim2.new(1, -12, 0, PANEL_TOP * scale.Scale)
+		panel.Position = UDim2.new(1, -12, 0.5, 0) -- pół na polu machnięcia, pół na polu hamowania, z boku kajaka
 	end
 end
 
@@ -304,7 +303,7 @@ local function button(name: string, text: string, size: UDim2, position: UDim2, 
 	item.Font = Enum.Font.GothamBold
 	item.Text = text
 	item.TextColor3 = COLORS.panel
-	item.TextSize = 14
+	item.TextSize = 12
 	item.Active = true
 	item.Parent = panel
 	local corner = Instance.new("UICorner")
@@ -329,7 +328,7 @@ local function label(position: UDim2, size: UDim2, font: Enum.Font, textSize: nu
 	return item
 end
 
--- Panel w prawym górnym rogu: rząd przycisków leży wyżej, niż sięga kciuk trzymający telefon.
+-- Panel z prawej strony, na środku wysokości ekranu: kajak jest pośrodku, więc zostaje odsłonięty.
 local function buildPanel()
 	gui = Instance.new("ScreenGui")
 	gui.Name = "LakeTutorial"
@@ -341,7 +340,7 @@ local function buildPanel()
 	panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.Active = false
-	panel.AnchorPoint = Vector2.new(1, 0)
+	panel.AnchorPoint = Vector2.new(1, 0.5)
 	panel.Size = UDim2.fromOffset(PANEL_WIDTH, PANEL_HEIGHT)
 	panel.BackgroundColor3 = COLORS.panel
 	panel.BackgroundTransparency = 0.15
@@ -354,11 +353,11 @@ local function buildPanel()
 	scale = Instance.new("UIScale")
 	scale.Parent = panel
 
-	titleLabel = label(UDim2.fromOffset(12, 14), UDim2.fromOffset(110, 22), Enum.Font.GothamBold, 16, COLORS.accent)
-	bodyLabel = label(UDim2.fromOffset(12, 48), UDim2.new(1, -24, 0, 84), Enum.Font.GothamMedium, 16, COLORS.text)
+	titleLabel = label(UDim2.fromOffset(10, 11), UDim2.fromOffset(78, 20), Enum.Font.GothamBold, 14, COLORS.accent)
+	bodyLabel = label(UDim2.fromOffset(10, 40), UDim2.new(1, -20, 0, 40), Enum.Font.GothamMedium, 14, COLORS.text)
 
-	skipAllButton = button("SkipAll", Texts.skipAll, UDim2.fromOffset(128, 32), UDim2.new(1, -8, 0, 8), COLORS.button)
-	skipButton = button("Skip", Texts.skip, UDim2.fromOffset(84, 32), UDim2.new(1, -144, 0, 8), COLORS.accent)
+	skipAllButton = button("SkipAll", Texts.skipAll, UDim2.fromOffset(104, 28), UDim2.new(1, -6, 0, 6), COLORS.button)
+	skipButton = button("Skip", Texts.skip, UDim2.fromOffset(64, 28), UDim2.new(1, -114, 0, 6), COLORS.accent)
 	skipButton.Activated:Connect(advance)
 	skipAllButton.Activated:Connect(function()
 		finish(false)
@@ -395,7 +394,7 @@ local function startIfNew()
 	while player:GetAttribute(LOADED_ATTRIBUTE) ~= true do
 		player:GetAttributeChangedSignal(LOADED_ATTRIBUTE):Wait()
 	end
-	if player:GetAttribute(DONE_ATTRIBUTE) ~= true then
+	if Config.TUTORIAL_ALWAYS or player:GetAttribute(DONE_ATTRIBUTE) ~= true then
 		begin()
 	end
 end

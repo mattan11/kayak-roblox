@@ -8,6 +8,8 @@ Do testu po publikacji (2026-10-31): medale, duchy, przycisk „Wyjdź”, prost
 
 Jeziorna wioska (kajak od startu, jezioro, strefa z boi, samouczek 4 kroki, menu ustawień) działa w Play 2026-10-31, kroki nauki 3–4 nieprzetestowane. Testy Lune: 179.
 
+**Przed publiczną premierą:** ustawić `Config.TUTORIAL_ALWAYS = false`.
+
 **Przed publiczną premierą:** tryb Bitwa (przedmioty ze skrzynek, `VISION.md`), z aktualizacją oceny zawartości.
 
 **Najpierw:** teleport wioska → spływ na dwóch kontach: komputer przeszedł, a telefon się nie połączył i Marek dostał **kod błędu 2**
