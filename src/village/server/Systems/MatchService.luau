@@ -58,6 +58,7 @@ local entries: { [number]: Entry } = {} -- bilety graczy z tego serwera; to one 
 local trips: { [number]: Trip } = {} -- userId → podróż w toku
 local removals: { Removal } = {} -- bilety do usunięcia z MemoryStore
 local joinedAt: { [number]: number } = {} -- ostatnie „join”, limit przełączania rzek
+local soloAt: { [number]: number } = {} -- ostatni wyjazd solo: każdy to rezerwacja serwera
 local sent: { [string]: MatchQueue.State } = {} -- ostatni wysłany QueueState
 local ticketMaps: { [string]: MemoryStoreSortedMap } = {}
 local warnedAt: { [string]: number } = {}
@@ -555,10 +556,42 @@ local function join(player: Player, river: any, rawMode: any)
 	mark(id)
 end
 
+-- Wyjazd solo: własny serwer od razu, bez biletu i lidera, nawet gdy w kolejce czekają inni. Wodna bitwa wymaga dwóch graczy, więc jej to nie dotyczy.
+local function solo(player: Player, river: any, rawMode: any)
+	local id = player.UserId
+	local time = now()
+	local mode = MatchQueue.parseMode(rawMode)
+	if type(river) ~= "string" or mode == nil or mode == "arena" then
+		return
+	end
+	if queues[MatchQueue.queueKey(river, mode)] == nil or trips[id] or not inZone(player, mode) then
+		return
+	end
+	if time - (soloAt[id] or -math.huge) < Config.MATCH_SOLO_COOLDOWN then
+		return
+	end
+	soloAt[id] = time
+	forget(id)
+	if STUDIO or health.down then
+		notice(id, if STUDIO then "travel.studio" else "travel.unavailable")
+		return
+	end
+	task.spawn(function()
+		local code = reserve(river, mode, 1)
+		if code == nil then
+			notice(id, "travel.failed")
+		elseif player.Parent == Players and trips[id] == nil then
+			beginTrip(player, code)
+		end
+	end)
+end
+
 local function onAction(player: Player, action: any, river: any, mode: any)
 	local id = player.UserId
 	if action == "join" then
 		join(player, river, mode)
+	elseif action == "solo" then
+		solo(player, river, mode)
 	elseif action == "leave" then
 		forget(id)
 	elseif action == "ready" then
@@ -633,7 +666,7 @@ function MatchService.start()
 	Players.PlayerRemoving:Connect(function(player)
 		local id = player.UserId
 		forget(id)
-		trips[id], joinedAt[id] = nil, nil
+		trips[id], joinedAt[id], soloAt[id] = nil, nil, nil
 	end)
 
 	if not STUDIO then

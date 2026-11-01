@@ -17,6 +17,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local LookAssets = require(Shared:WaitForChild("LookAssets"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local Client = script.Parent.Parent
@@ -510,7 +511,7 @@ local function buildNet(): NetSlot
 end
 
 local function buildCrateSlot(): CrateSlot
-	local part = newPart(Vector3.one * CRATE_SIZE, CRATE_COLOR)
+	local part = LookAssets.clone("Crate") or newPart(Vector3.one * CRATE_SIZE, CRATE_COLOR)
 	local board = Instance.new("BillboardGui")
 	board.Size = UDim2.fromOffset(54, 54)
 	board.StudsOffset = Vector3.new(0, CRATE_SIZE, 0)

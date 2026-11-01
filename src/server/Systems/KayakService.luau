@@ -119,9 +119,21 @@ function KayakService.build(userId: number): Model
 	local paddleAt = CFrame.new(0, 2, -0.9)
 	local paddle = shell(model, "Part", "Paddle", Vector3.new(6, 0.2, 0.2), paddleAt, Color3.fromRGB(200, 200, 205))
 	paddle.Shape = Enum.PartType.Cylinder
-	for _, side in { -1, 1 } do
-		local blade = shell(model, "Part", "Blade", Vector3.new(1, 0.6, 0.08), paddleAt * CFrame.new(side * 3.3, 0, 0), dark)
-		weld(paddle, blade)
+	local paddleLook = LookAssets.clone("Paddle")
+	if paddleLook then
+		paddle.Transparency = 1
+		paddleLook.Name = "PaddleLook"
+		paddleLook.Parent = model
+		paddleLook:PivotTo(paddleAt)
+		for _, part in paddleLook:GetChildren() do
+			part.Anchored = false
+			weld(paddle, part)
+		end
+	else
+		for _, side in { -1, 1 } do
+			local blade = shell(model, "Part", "Blade", Vector3.new(1, 0.6, 0.08), paddleAt * CFrame.new(side * 3.3, 0, 0), dark)
+			weld(paddle, blade)
+		end
 	end
 	local joint = Instance.new("Motor6D")
 	joint.Name = "PaddleJoint"

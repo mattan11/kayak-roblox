@@ -358,7 +358,14 @@ local function buildGate(parent: Instance, s: number, text: string, color: Color
 	local height = 18
 	for _, side in { -1, 1 } do
 		local foot = center + q.normal * (side * reach)
-		decoration(parent, Vector3.new(1.4, height, 1.4), CFrame.new(foot.X, q.level + height / 2 - 2, foot.Y), Color3.fromRGB(70, 60, 52), Enum.Material.Wood, true)
+		local post = LookAssets.clone("GatePost")
+		if post then
+			post.CFrame = CFrame.new(foot.X, q.level + height / 2 - 2, foot.Y)
+			post.Color = Color3.fromRGB(70, 60, 52)
+			post.Parent = parent
+		else
+			decoration(parent, Vector3.new(1.4, height, 1.4), CFrame.new(foot.X, q.level + height / 2 - 2, foot.Y), Color3.fromRGB(70, 60, 52), Enum.Material.Wood, true)
+		end
 	end
 	local origin = Vector3.new(center.X, q.level + height - 4, center.Y)
 	local forward = Vector3.new(q.tangent.X, 0, q.tangent.Y)

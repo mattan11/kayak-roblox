@@ -11,7 +11,7 @@ Pipeline i pułapki importu jak w Anchorfall (`ASSET_TOOLS.md`, `assets/README.m
 
 ## Narzędzie
 - Koncept: Meshy, tekst → obraz, `nano-banana` (3 kr.), 2 wersje; `nano-banana-2` (6 kr.), gdy tańszy gubi styl. Format 1:1.
-- Model: obraz → 3D, `meshy-t2.5`, tekstura 2K, siatka z zapasem, odchudzanie u nas.
+- Model: obraz → 3D, `meshy-t2.5`, tekstura 2K. Zawsze dużo trójkątów (15–20 tys., decyzja Marka: bez wpływu na cenę), odchudzanie u nas w Blenderze.
 - Blender: scalenie wierzchołków przed odchudzaniem (`remove_doubles`), podgląd z `use_backface_culling`, podział zestawu po niepołączonych bryłach, przemalowanie na wspólną paletę (najwyżej 256 px).
 - Zestawy: kilka obiektów z odstępami na jednym obrazie, jeden model 3D, podział w Blenderze. Kajak, domy i punkty charakterystyczne osobno.
 
@@ -37,3 +37,4 @@ Rekwizyty i tło wokół obiektu, cień na ziemi, dym, napisy, styl bajkowy, krz
 
 ## Dziennik poprawek
 - 2026-11-01 (pilotaż, 63 kr.): styl konceptów wyszedł dobrze (`concepts/pilot`). Zestawy działają: arkusz daje osobne obiekty, a nitkę między drzewami tnie `build_pilot.py`. Modele prostych brył z Meshy (kajak, skały) miały luki i ściany w środku, więc takie kształty budujemy w Blenderze według konceptu, a Meshy zostaje dla brył złożonych i zestawów roślin. Modele bez tekstury, kolor z gry (`MeshPart.Color`, SmoothPlastic).
+- 2026-11-01 (skiny): ChatGPT daje koncepty w stylu gry, Leonardo odjeżdża w realizm; Neon i Lodowy Smok zrobione w Meshy z wzorcami `kraken.png` i `dragon.png`. Zestaw trzech kajaków z jednego obrazu rozdzielił się, ale kosztem jakości i kokpitów na wylot: modele skinów osobno, a kokpit i obrys poprawiamy w Blenderze. Generować 15–20 tys. trójkątów.

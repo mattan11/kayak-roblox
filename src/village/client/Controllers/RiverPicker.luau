@@ -71,6 +71,7 @@ local panel: Frame = nil
 local titleLabel: TextLabel = nil
 local statusLabel: TextLabel = nil
 local goButton: TextButton = nil
+local soloButton: TextButton = nil
 local noticeGroup: Frame = nil
 local noticeLabel: TextLabel = nil
 
@@ -168,6 +169,8 @@ local function render()
 		local queue = queues[queueKey(entry.river or entry.id, joinedMode)]
 		local waitingAlone = inArena and (queue == nil or queue.count < ARENA_MIN_PLAYERS)
 		goButton.Visible = not waitingAlone -- sam nie wystartuje, więc „Płyń teraz” nic by nie dało
+		soloButton.Visible = not inArena
+		panel.Size = UDim2.fromOffset(Config.PIER_PANEL_WIDTH, if inArena then PANEL_HEIGHT else PANEL_HEIGHT + Config.UI_BUTTON_HEIGHT + 6)
 		if queue == nil or queue.count <= 0 then
 			statusLabel.Text = Texts.queueJoining -- nasz bilet jeszcze nie dotarł do lidera albo grupa właśnie startuje
 		elseif waitingAlone then
@@ -479,11 +482,12 @@ local function buildPicker()
 	showTilesForZone()
 end
 
-local function actionButton(text: string, anchorX: number, color: Color3, onClick: () -> ()): TextButton
+-- Przycisk w dolnym rzędzie panelu: połowa szerokości po lewej lub prawej, a `wide` to cały rząd nad nimi.
+local function actionButton(text: string, anchorX: number, color: Color3, onClick: () -> (), wide: boolean?): TextButton
 	local button: any = make("TextButton", {
 		AnchorPoint = Vector2.new(anchorX, 1),
-		Position = UDim2.new(anchorX, if anchorX == 0 then 12 else -12, 1, -8),
-		Size = UDim2.new(0.5, -16, 0, Config.UI_BUTTON_HEIGHT),
+		Position = UDim2.new(anchorX, if anchorX == 0 then 12 else -12, 1, if wide then -14 - Config.UI_BUTTON_HEIGHT else -8),
+		Size = if wide then UDim2.new(1, -24, 0, Config.UI_BUTTON_HEIGHT) else UDim2.new(0.5, -16, 0, Config.UI_BUTTON_HEIGHT),
 		BackgroundColor3 = color,
 		Font = FONT_BOLD,
 		Text = text,
@@ -540,6 +544,14 @@ local function buildPanel()
 		leaveQueue()
 		render()
 	end)
+	soloButton = actionButton(Texts.queueSolo, 0, COLORS.fill, function()
+		local entry, mode = joined, joinedMode
+		if entry then
+			leaveQueue()
+			Remotes.get("QueueAction"):FireServer("solo", entry.river or entry.id, mode)
+			render()
+		end
+	end, true)
 end
 
 local function buildNotice()

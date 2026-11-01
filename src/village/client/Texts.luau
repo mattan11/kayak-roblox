@@ -36,6 +36,7 @@ return {
 	queueGo = "Płyń teraz",
 	queueGoWaiting = "Czekamy…",
 	queueLeave = "Zejdź",
+	queueSolo = "Płyń sam",
 
 
 	-- LakeTutorial. Kierunki i pola dopasowuje kontroler do sterowania gracza.

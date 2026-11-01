@@ -85,10 +85,10 @@ local Config = {
 		Test = { gold = 123, silver = 135, bronze = 156 },
 		Easy2 = { gold = 116, silver = 127, bronze = 146 },
 		Easy3 = { gold = 129, silver = 141, bronze = 163 },
-		Medium1 = { gold = 140, silver = 156, bronze = 183 },
-		Medium2 = { gold = 146, silver = 162, bronze = 191 },
-		Mountain = { gold = 158, silver = 175, bronze = 205 },
-		Hard2 = { gold = 170, silver = 187, bronze = 219 },
+		Medium1 = { gold = 132, silver = 147, bronze = 173 },
+		Medium2 = { gold = 137, silver = 152, bronze = 180 },
+		Mountain = { gold = 152, silver = 168, bronze = 197 },
+		Hard2 = { gold = 150, silver = 165, bronze = 193 },
 	},
 
 	-- Duchy
@@ -264,6 +264,7 @@ local Config = {
 	MATCH_PUBLISH_TIMES = 2, -- Match idzie tyle razy, bo dostawa nie jest gwarantowana
 	MATCH_PUBLISH_GAP = 2, -- odstęp między wysyłkami
 	MATCH_TAKEN_TIMEOUT = 15, -- bilet zabrany, a Match nie doszedł: po tylu s gracz dostaje travel.failed
+	MATCH_SOLO_COOLDOWN = 5, -- najmniejszy odstęp między wyjazdami solo: każdy to rezerwacja serwera
 	MATCH_JOIN_COOLDOWN = 2, -- najmniejszy odstęp między dołączeniami gracza (każde to zapis w MemoryStore)
 	MATCH_FAIL_LIMIT = 3, -- tyle błędów MemoryStore z rzędu włącza tryb lokalny
 	MATCH_PROBE_INTERVAL = 30, -- w trybie lokalnym co tyle s sprawdzamy, czy MemoryStore wrócił

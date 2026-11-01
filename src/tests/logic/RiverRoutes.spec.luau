@@ -12,11 +12,11 @@ return function(t)
 		return River.new(require(rivers:FindFirstChild(entry.river)))
 	end
 
-	-- Bot celuje w punkt przed sobą, jak w specu górskiej rzeki. Wynik: czas przejazdu i najwyższa prędkość.
-	local function race(river: any): (number, number)
+	-- Bot celuje w punkt przed sobą, jak w specu górskiej rzeki. Wynik: czas przejazdu, najwyższa prędkość i uderzenia.
+	local function race(river: any): (number, number, number)
 		local start = river:query(river:pointAt(Config.START_DISTANCE))
 		local state = KayakPhysics.new(river:pointAt(Config.START_DISTANCE), math.atan2(start.tangent.Y, start.tangent.X))
-		local elapsed, peak = 0, 0
+		local elapsed, peak, hits = 0, 0, 0
 		while elapsed < Config.RACE_TIME_LIMIT do
 			local q = river:query(state.position, state.hint)
 			if q.s >= river.length - Config.FINISH_MARGIN then
@@ -35,8 +35,12 @@ return function(t)
 			KayakPhysics.step(state, river, nil, 1 / 30)
 			elapsed += 1 / 30
 			peak = math.max(peak, state.velocity.Magnitude)
+			if state.lastHit > 0 then
+				hits += 1
+				state.lastHit = 0
+			end
 		end
-		return elapsed, peak
+		return elapsed, peak, hits
 	end
 
 	t.describe("trasy z katalogu", function()
@@ -74,8 +78,8 @@ return function(t)
 		t.it("bot kończy każdą rzekę w limicie, bez przekroczenia prędkości", function()
 			for _, entry in RiverCatalog do
 				local river = load(entry)
-				local time, peak = race(river)
-				print(`[bot] {entry.id}: długość {math.floor(river.length)}, czas {math.floor(time)} s, prędkość {math.floor(peak)}`)
+				local time, peak, hits = race(river)
+				print(`[bot] {entry.id}: długość {math.floor(river.length)}, czas {math.floor(time)} s, prędkość {math.floor(peak)}, uderzenia {hits}`)
 				t.expect(time).toBeLessThan(Config.RACE_TIME_LIMIT - 40)
 				t.expect(peak).toBeLessThan(Config.MAX_KAYAK_SPEED)
 			end
