@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local LookAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LookAssets"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 
 local KayakService = {}
@@ -92,9 +93,22 @@ function KayakService.build(userId: number): Model
 	hull.RootPriority = 127 -- korzeniem złożenia zostaje Hull, także gdy siądzie w nim postać
 	model.PrimaryPart = hull
 
-	tip(model, hull, "Bow", CFrame.identity)
-	tip(model, hull, "Stern", CFrame.Angles(0, math.pi, 0))
-	weld(hull, shell(model, "Part", "Cockpit", Vector3.new(1.5, 0.1, 3), CFrame.new(0, HULL_HEIGHT / 2 + 0.02, -0.2), dark))
+	-- Wygląd: model z LookAssets na niewidocznym Hull. Bez szablonu stary kajak z części.
+	local look = LookAssets.clone("KayakClassic")
+	if look then
+		hull.Transparency = 1
+		look.Name = "Look"
+		look.Paint.Color = color
+		look.Parent = model
+		for _, part in look:GetChildren() do
+			part.Anchored = false
+			weld(hull, part)
+		end
+	else
+		tip(model, hull, "Bow", CFrame.identity)
+		tip(model, hull, "Stern", CFrame.Angles(0, math.pi, 0))
+		weld(hull, shell(model, "Part", "Cockpit", Vector3.new(1.5, 0.1, 3), CFrame.new(0, HULL_HEIGHT / 2 + 0.02, -0.2), dark))
+	end
 
 	local seat = shell(model, "Seat", "Seat", Vector3.new(1.3, 0.2, 1.3), CFrame.new(0, HULL_HEIGHT / 2 + 0.1, 0.2), dark)
 	seat.Transparency = 1

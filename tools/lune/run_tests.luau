@@ -186,7 +186,8 @@ local Spec = requireModule(tests:FindFirstChild("Spec"))
 
 local specs = {}
 for _, child in tests:GetDescendants() do
-	if child:IsA("ModuleScript") and string.match(child.Name, "%.spec$") then
+	-- Narzędzie bez końcówki .spec (np. BestLine) działa tylko wywołane z nazwy: w zwykłym przebiegu byłoby za wolne.
+	if child:IsA("ModuleScript") and (string.match(child.Name, "%.spec$") or child.Name == filter) then
 		table.insert(specs, child)
 	end
 end

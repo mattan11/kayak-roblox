@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local LookAssets = require(Shared:WaitForChild("LookAssets"))
 local Content = Shared:WaitForChild("content")
 local LakeLayout = require(Content:WaitForChild("LakeLayout"))
 local RiverCatalog = require(Content:WaitForChild("RiverCatalog"))
@@ -216,6 +217,9 @@ end
 -- Liściaste: pień + dwie kule korony.
 local function leafyTree(parent: Instance, base: Vector3, height: number, random: Random)
 	local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]
+	if LookAssets.plantTree(parent, false, base, height, color, TRUNK_COLOR, random) then
+		return
+	end
 	local width = height * 0.09
 	decoration(parent, Vector3.new(width, height * 0.6, width), CFrame.new(base + Vector3.yAxis * height * 0.3), TRUNK_COLOR, Enum.Material.Wood, false)
 	local crown = height * 0.62
@@ -229,6 +233,9 @@ end
 -- Iglaste: pień + trzy coraz węższe walce („stożek” schodkowy; Roblox nie ma stożka wśród prostych części).
 local function pineTree(parent: Instance, base: Vector3, height: number, random: Random)
 	local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]:Lerp(Color3.fromRGB(30, 70, 60), 0.4)
+	if LookAssets.plantTree(parent, true, base, height, color, TRUNK_COLOR, random) then
+		return
+	end
 	local width = height * 0.07
 	decoration(parent, Vector3.new(width, height * 0.5, width), CFrame.new(base + Vector3.yAxis * height * 0.25), TRUNK_COLOR, Enum.Material.Wood, false)
 	local layer = height * 0.24

@@ -36,6 +36,7 @@ type Slot = {
 	fadeIn: number,
 	fadeOut: number,
 	x: number,
+	y: number,
 	z: number,
 	vx: number,
 	vz: number,
@@ -102,6 +103,7 @@ local function fillPool(pool: { Slot }, count: number, disc: boolean, color: Col
 			fadeIn = 0.2,
 			fadeOut = 0.4,
 			x = 0,
+			y = 0,
 			z = 0,
 			vx = 0,
 			vz = 0,
@@ -137,7 +139,7 @@ local function launch(slot: Slot, x: number, z: number, vx: number, vz: number, 
 	slot.life = life
 	slot.fadeIn = life * 0.25
 	slot.fadeOut = life * 0.4
-	slot.x, slot.z = x, z
+	slot.x, slot.y, slot.z = x, fxLevel + Config.FX_WATER_Y, z
 	slot.vx, slot.vz = vx, vz
 	slot.opacity = opacity
 	slot.omega = nil
@@ -217,7 +219,6 @@ end
 local function spawnWakeStrip(x: number, z: number, dx: number, dz: number, vx: number, vz: number, length: number, opacity: number)
 	local slot = acquire(wakes)
 	if slot then
-		fxLevel = if Session.state then Session.state.height else 0
 		launch(slot, x, z, vx, vz, 0.8, opacity)
 		slot.rotation = flatRotation(dx, dz)
 		slot.part.Size = Vector3.new(0.45, FLAT_THICKNESS, length)
@@ -228,6 +229,7 @@ end
 local function emitWake(position: Vector3, forward: Vector3, speed: number)
 	local fx, fz = forward.X, forward.Z
 	local rx, rz = -fz, fx
+	fxLevel = position.Y - Config.KAYAK_RIDE_Y -- każdy kajak ma swoje lustro wody, także za wodospadem
 	local strength = math.min(speed / Config.POSE_FULL_SPEED, 1)
 	local bowX, bowZ = position.X + fx * 3.5, position.Z + fz * 3.5
 	local spread = speed * 0.2

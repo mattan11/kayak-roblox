@@ -37,8 +37,8 @@ Robiona równolegle z Anchorfall — ma zostać **mała i prosta**.
 
 ## Rzeki i tryby (decyzje 2026-10-30)
 
-- **Na start 7 stałych rzek:** 3 łatwe, 2 średnie, 2 trudne. Mają trwały ranking i medale. Jest już jedna łatwa (`Test`,
-  do nazwania) i jedna trudna (`Mountain`), czyli do zrobienia 2 łatwe, 2 średnie, 1 trudna.
+- **Na start 7 stałych rzek:** 3 łatwe, 2 średnie, 2 trudne. Mają trwały ranking i medale. Komplet od 2026-10-31: Leśna Struga, Słoneczna Dolina,
+  Piaskowa Łacha (łatwe), Sosnowy Bór, Czerwony Kanion (średnie), Górski Potok, Lodowy Żleb (trudne).
 - **Rzeka tygodnia (po duchach):** generowana z ziarna wyliczonego z numeru tygodnia, ta sama dla wszystkich, z osobnym
   rankingiem i bez publikacji. Bot sprawdza każdą trasę; gdy utknie, generator bierze następne ziarno. Najpierw próba na
   kilku trasach, czy są ciekawe, a nie tylko przejezdne.

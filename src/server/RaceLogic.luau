@@ -156,14 +156,14 @@ function RaceLogic:tick(now: number, playerCount: number): Phase?
 		if now < self.phaseEndsAt and not self:_allDone() then
 			return nil
 		end
-		self:_enter("results", now + (if playerCount == 1 then Config.SOLO_RESULTS_TIME else Config.RESULTS_TIME))
+		self:_enter("results", now + Config.RESULTS_TIME)
 	else -- results
 		local everyone = self:_everyoneAgain(playerCount)
-		if now < self.phaseEndsAt and not everyone then
+		-- Solo nikt nie czeka na gracza, więc nowa runda rusza tylko na jego „Jeszcze raz”
+		if not everyone and (playerCount == 1 or now < self.phaseEndsAt) then
 			return nil
 		end
-		local time = if playerCount == 1 then Config.SOLO_COUNTDOWN_TIME else Config.COUNTDOWN_TIME
-		self:_enter("countdown", now + (if everyone then Config.AGAIN_COUNTDOWN else time))
+		self:_enter("countdown", now + (if everyone then Config.AGAIN_COUNTDOWN else Config.COUNTDOWN_TIME))
 	end
 	return self.phase
 end

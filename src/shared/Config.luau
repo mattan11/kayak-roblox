@@ -61,9 +61,7 @@ local Config = {
 	COUNTDOWN_TIME = 10, -- faza countdown: dołączanie + odliczanie
 	RACE_TIME_LIMIT = 300, -- twardy limit wyścigu
 	FINISH_GRACE = 60, -- po pierwszym na mecie reszta ma tyle czasu
-	RESULTS_TIME = 10, -- ekran wyników
-	SOLO_RESULTS_TIME = 6, -- solo krócej: szybki restart to najtańszy sposób na „jeszcze jedną rundę”
-	SOLO_COUNTDOWN_TIME = 5,
+	RESULTS_TIME = 10, -- ekran wyników w grupie; solo czeka na decyzję gracza
 	SLOT_ROW_SPACING = 9, -- gdy kajaki nie mieszczą się w poprzek: odstęp kolejnego rzędu (w górę rzeki)
 	RACE_SAMPLE_INTERVAL = 0.1, -- co ile serwer odczytuje pozycje kajaków
 	MAX_KAYAK_SPEED = 55, -- limit anty-oszustwo: nurt 28 + wiosłowanie 18 + zapas (spec sprawdza bota)
@@ -84,8 +82,13 @@ local Config = {
 	-- Medale
 	-- Czasy w sekundach (COSMETICS.md, sekcja 3). Rzeka bez wpisu nie daje medali, spec wymaga wpisu dla każdej dostępnej.
 	RIVER_MEDALS = {
-		Test = { gold = 118, silver = 135, bronze = 160 },
-		Mountain = { gold = 145, silver = 165, bronze = 190 },
+		Test = { gold = 123, silver = 135, bronze = 156 },
+		Easy2 = { gold = 116, silver = 127, bronze = 146 },
+		Easy3 = { gold = 129, silver = 141, bronze = 163 },
+		Medium1 = { gold = 140, silver = 156, bronze = 183 },
+		Medium2 = { gold = 146, silver = 162, bronze = 191 },
+		Mountain = { gold = 158, silver = 175, bronze = 205 },
+		Hard2 = { gold = 170, silver = 187, bronze = 219 },
 	},
 
 	-- Duchy

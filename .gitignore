@@ -8,3 +8,7 @@ sourcemap.json
 
 # Źródła Blendera — kopie zapasowe
 *.blend1
+
+# Surowe pliki z Meshy: kopia jest na koncie Meshy
+assets/_ai/
+assets/concepts/pilot/

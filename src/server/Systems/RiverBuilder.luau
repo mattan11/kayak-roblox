@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Lake = require(Shared:WaitForChild("Lake"))
+local LookAssets = require(Shared:WaitForChild("LookAssets"))
 local River = require(Shared:WaitForChild("River"))
 local ArenaLayout = require(Shared:WaitForChild("content"):WaitForChild("ArenaLayout"))
 
@@ -116,6 +117,10 @@ local function buildTerrain()
 	local terrain = workspace.Terrain
 	terrain:SetMaterialColor(Enum.Material.Grass, GRASS_COLOR)
 	terrain:SetMaterialColor(Enum.Material.Sand, SAND_COLOR)
+	local tint = riverData.groundColor -- opcjonalnie { r, g, b }: ten sam materiał, inny krajobraz
+	if tint then
+		terrain:SetMaterialColor((Enum.Material :: any)[riverData.ground], Color3.fromRGB(tint[1], tint[2], tint[3]))
+	end
 
 	-- Blok gruntu: prostokąt obejmujący rzekę + zapas
 	local minimum, maximum = river.positions[1], river.positions[1]
@@ -185,6 +190,10 @@ end
 -- Kamień z 2–3 obróconych brył: pierwsza główna, reszta mniejsza, z boku. Promień kolizji = rock.radius.
 local function buildRock(parent: Instance, rock: any, random: Random)
 	local radius = rock.radius
+	local spot = Vector3.new(rock.position.X, rock.level + 0.2, rock.position.Y)
+	if LookAssets.placeRock(parent, spot, radius, ROCK_COLORS[random:NextInteger(1, #ROCK_COLORS)], random) then
+		return
+	end
 	for index = 1, random:NextInteger(2, 3) do
 		local scale = if index == 1 then 1 else 0.7
 		local size = Vector3.new(
@@ -209,9 +218,19 @@ end
 
 -- ── Drzewa ──────────────────────────────────────────────────────────────────────────────────────────────
 
+-- Kolor korony z palety, opcjonalnie przesunięty w stronę barwy rzeki (`treeTint = { r, g, b }`: śnieg, złota łąka).
+local function leafColor(random: Random): Color3
+	local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]
+	local tint = riverData.treeTint
+	return if tint then color:Lerp(Color3.fromRGB(tint[1], tint[2], tint[3]), 0.75) else color
+end
+
 -- Liściaste: pień + dwie kule korony.
 local function leafyTree(parent: Instance, base: Vector3, height: number, random: Random)
-	local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]
+	local color = leafColor(random)
+	if LookAssets.plantTree(parent, false, base, height, color, TRUNK_COLOR, random) then
+		return
+	end
 	local width = height * 0.09
 	decoration(parent, Vector3.new(width, height * 0.6, width), CFrame.new(base + Vector3.yAxis * height * 0.3), TRUNK_COLOR, Enum.Material.Wood, false)
 	local crown = height * 0.62
@@ -224,7 +243,10 @@ end
 
 -- Iglaste: pień + trzy coraz węższe walce („stożek” schodkowy; Roblox nie ma stożka wśród prostych części).
 local function pineTree(parent: Instance, base: Vector3, height: number, random: Random)
-	local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]:Lerp(Color3.fromRGB(30, 70, 60), 0.4)
+	local color = leafColor(random):Lerp(Color3.fromRGB(30, 70, 60), 0.4)
+	if LookAssets.plantTree(parent, true, base, height, color, TRUNK_COLOR, random) then
+		return
+	end
 	local width = height * 0.07
 	decoration(parent, Vector3.new(width, height * 0.5, width), CFrame.new(base + Vector3.yAxis * height * 0.25), TRUNK_COLOR, Enum.Material.Wood, false)
 	local layer = height * 0.24
