@@ -3,6 +3,47 @@
 Plan z 2026-10-31. Pierwsza wersja (v1): tylko odblokowania za grę, bez waluty i sklepu.
 **[Z]** oznacza założenie do sprawdzenia, a nie fakt z kodu lub pomiaru.
 
+## 0. Stan wdrożenia v1 (2026-11-02): zmiany względem planu
+
+Decyzje Marka z 2026-11-02 są nadrzędne wobec sekcji 2, 4, 7 i 8 poniżej. Wdrożone (gałąź `agent/locker`):
+
+- **Gwiazdki zamiast liczników.** Na każdej rzece najwyższy medal daje brąz 1★, srebro 2★, złoto 3★ (7 rzek, najwyżej 21★).
+  Gwiazdek się nie wydaje: próg tylko odblokowuje, na zawsze. Nowy rodzaj `unlock = { kind = "stars", min = N }`.
+  Rodzaje `stat`, `medals`, `riverMedal`, `treasures`, `shop` nie są jeszcze obsługiwane; `robux` jest w kodzie jako „nigdy za grę”, bez produktów.
+- **Tylko dwa sloty:** `kayak` i `paint`. Kask, kamizelka, wiosło i ślad później (dojdą przez szablon i `Reconcile`).
+- **Skórki z modeli**, nie z Part: `render = { kind = "model", template, paintable, swatch }`, szablony w `ReplicatedStorage.LookAssets`
+  (tylko w Studio, brak = klasyk). Skórki z teksturą mają stały wygląd, kolor działa tylko na klasyku.
+
+| id | Szablon | Próg |
+|---|---|---|
+| `kayak_classic` | `KayakClassic` | domyślny, kolor na `Paint` |
+| `kayak_round` | `KayakRound` | 1★ |
+| `kayak_duck` | `KayakDuck` | 3★ (docelowo Robux) |
+| `kayak_racer` | `KayakRacer` | 4★ |
+| `kayak_shark` | `KayakShark` | 6★ |
+| `kayak_icebreaker` | `KayakIcebreaker` | 8★ |
+| `kayak_rocket` | `KayakRocket` | 10★ |
+| `kayak_neon` | `KayakNeon` | 12★ (docelowo Premium za Robux) |
+| `kayak_phoenix` | `KayakPhoenix` | 14★ |
+| `kayak_gold` | `KayakGold` | 16★ |
+| `kayak_kraken` | `KayakKraken` | 18★ |
+| `kayak_ice_dragon` | `KayakIceDragon` | 20★ (docelowo Premium za Robux) |
+| `kayak_dragon` | `KayakDragon` | 21★ |
+
+Kolory (tylko klasyk): `paint_auto` (kolor z `userId`, domyślny), `paint_sunset` 0★, `paint_lagoon` 1★, `paint_forest` 1★,
+`paint_lemon` 2★, `paint_berry` 3★, `paint_snow` 4★, `paint_night` 5★.
+
+- **Moduły:** `CosmeticRules` nazywa się `Shared.Cosmetics` (`stars`, `isUnlocked`, `evaluate`, `canEquip`, `sanitize`, `look`, `grantAll`).
+  `LookService` na spływie tylko zakłada wygląd. Medale zostały w `Shared.Medals` (`migrate` bez zmian), `records` nie dodane.
+- **Szkielet i skóra:** `Shared.KayakBody` buduje folder `Look` (szablon albo kajak z Part), `Hull` jest zawsze niewidoczny.
+  `KayakService.setLook` zmienia skórę także na pływającym kajaku. `Config.STUDIO_KAYAK` działa dalej, ale tylko na spływie.
+- **Szafka nie przy placu, tylko na jeziorze:** gracz cały czas pływa, więc to ring boi (`LakeLayout.locker`, ok. `(-82, 94)`,
+  południowy zachód) z budką na plaży za nim, między domkami pod kątem 112° i 150°. System `VillageLocker`, strefa `workspace.Locker.LockerZone`.
+- **Okno:** dwie zakładki (Kajaki, Kolory), kafelki z progiem ★ i kłódką, licznik ★, podgląd 3D (jeden `ViewportFrame`), „Załóż”.
+  Wybór zablokowanej pozycji pokazuje ją w podglądzie i powód blokady. „Nowe” znika po wyjściu z zakładki lub zamknięciu okna.
+- **Nie zrobione w v1:** `UnlockToast` na spływie, znacznik nad budką, `nextGoal`, medale na kafelkach `RiverPicker`.
+- `Config.COSMETICS_STUDIO_ALL = true`: w Studio profil zawsze z `store.Mock` (tymczasowy) i wszystko odblokowane. Poza Studio bez znaczenia.
+
 ## 1. Zasady
 
 1. **Nie sprzedajemy mocy.** Wygląd nie zmienia fizyki. Pozycja w katalogu nie ma żadnego pola liczbowego wpływającego na ruch.

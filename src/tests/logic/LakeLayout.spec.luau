@@ -69,6 +69,21 @@ return function(t)
 			end
 		end)
 
+		t.it("szafka: ring w jeziorze, z dala od startu, stref, przeszkód i tablic, budka na plaży", function()
+			local locker = LakeLayout.locker
+			t.expect((locker.position - LakeLayout.center).Magnitude + locker.radius < LakeLayout.radius).toBe(true)
+			t.expect((locker.position - LakeLayout.spawn).Magnitude > locker.radius + 30).toBe(true) -- 20 miejsc startu ma zapas
+			for _, zone in LakeLayout.zones do
+				t.expect((locker.position - zone.position).Magnitude > locker.radius + zone.radius + 15).toBe(true)
+				t.expect((locker.sign - zone.sign).Magnitude > LakeLayout.signWidth).toBe(true)
+			end
+			for _, obstacle in LakeLayout.obstacles do
+				t.expect((locker.position - obstacle.position).Magnitude > locker.radius + obstacle.radius + 5).toBe(true)
+			end
+			t.expect((locker.sign - LakeLayout.center).Magnitude > LakeLayout.radius).toBe(true)
+			t.expect((locker.sign - LakeLayout.center).Magnitude < LakeLayout.radius + Config.VILLAGE_BEACH_WIDTH).toBe(true)
+		end)
+
 		t.it("dziób na starcie patrzy na strefę", function()
 			local forward = Vector2.new(math.cos(LakeLayout.heading), math.sin(LakeLayout.heading))
 			local toZone = (LakeLayout.zone.position - LakeLayout.spawn).Unit

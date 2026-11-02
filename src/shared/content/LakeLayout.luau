@@ -59,6 +59,16 @@ local slalom: { Circle } = {
 local obstacles: { Circle } = table.clone(buoys)
 table.move(slalom, 1, #slalom, #obstacles + 1, obstacles)
 
+-- Szafka: własny ring boi na jeziorze (bez trybu kolejki, więc to nie jest `zones`) i budka na plaży za nim.
+-- Południowy zachód, między domkami pod kątem 112° i 150°: z dala od startu, stref i slalomu (VillageLocker stawia bryły).
+local lockerOffset = Vector2.new(-82, 94)
+local locker = {
+	position = center + lockerOffset,
+	radius = Config.VILLAGE_LOCKER_ZONE_RADIUS,
+	color = Color3.fromRGB(64, 200, 170),
+	sign = center + lockerOffset.Unit * SIGN_DISTANCE, -- środek budki
+}
+
 local raceZone = zones[1] -- `zone` poniżej to jej alias: nauka prowadzi do strefy wyścigu
 local toZone = raceZone.position - spawn
 
@@ -70,6 +80,7 @@ return {
 	obstacles = obstacles, -- wszystko, co odbija kajak; ringi stref nie, bo przez nie się wpływa
 	zones = zones,
 	zone = raceZone,
+	locker = locker,
 	signWidth = SIGN_WIDTH,
 	signHeight = SIGN_HEIGHT,
 	buoys = buoys,

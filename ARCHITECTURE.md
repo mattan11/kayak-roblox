@@ -62,7 +62,8 @@ wszystkich albo limitu 300 s; po pierwszym na mecie reszta ma 60 s) → `results
 5. Serwer spływu ustawia atrybut `workspace.RiverId`. Klient buduje `Session.river` dopiero po pojawieniu się tego atrybutu.
 6. Pierwsze odliczanie rusza, gdy dotrą wszyscy z `expected` albo po 15 s.
 7. Nieudany teleport (`TeleportInitFailed` lub błąd `pcall`): do 3 prób co 2 s, potem gracz wraca na pomost. Po teleporcie
-   dane gracza są zapisane, bo `ProfileStore` zwalnia sesję przy wyjściu. Wioska na razie nie używa `ProfileStore`.
+   dane gracza są zapisane, bo `ProfileStore` zwalnia sesję przy wyjściu. Od szafki wioska też trzyma sesję profilu
+   (sekcja „Wygląd i szafka”), więc spływ może poczekać kilka sekund na jej zwolnienie.
 
 ### Przejście spływ → wioska
 
@@ -165,3 +166,25 @@ Strumień zamiast pojedynczych strzałów. `ArenaFire(true/false)` otwiera i zam
 - **Odepchnięcie:** `ArenaPush(dx, dz)` idzie do ofiary, a jej klient dodaje to do prędkości kajaka.
 - **Osłony:** strumień nie przechodzi przez `ArenaLayout.obstacles` (przecięcie odcinka z kołem).
 - **Cel:** szerszy stożek, najbliższy gracz; `ArenaHit` dalej pokazuje strumień innym.
+
+## Wygląd i szafka (kontrakt z 2026-11-02, plan w `COSMETICS.md`)
+
+Skórki kajaka i kolory klasyka. Wygląd nigdy nie zmienia fizyki: `Hull` jest zawsze niewidoczny i ma stały rozmiar, a widać folder `Look`.
+
+- **Moduły:** `content/CosmeticCatalog` (dane), `Shared.Cosmetics` (gwiazdki, odblokowania, `canEquip`, `sanitize`, `look`),
+  `Shared.KayakBody` (widoczne części z szablonu `ReplicatedStorage.LookAssets` albo z Part; ten sam kod buduje kajak na serwerze i podgląd w szafce).
+- **Profil:** `src/server/PlayerProfile.luau` (szablon, migracja, `get`, `onLoaded`, `start`), wspólny dla obu miejsc.
+  `village.project.json` montuje pod `Server` także `Packages` i `PlayerProfile`, więc ścieżka `script.Parent.Packages` jest ta sama.
+  `PlayerData` (spływ) używa go dla rekordów i medali. Pole `cosmetics = { owned, unseen, equipped }`.
+- **Kajak:** `KayakService.setLook(player, look)` zmienia skórę pływającego kajaka (nowy `Look` spawany do `Hull`, potem `SetNetworkOwner`),
+  a nowy kajak dostaje ostatni wygląd w `place`. `look` = `Cosmetics.look(equipped, userId)` = `{ template, color?, classicColor }`.
+  Brak szablonu = klasyk, brak klasyka = kajak z Part. W Studio `Config.STUDIO_KAYAK` nadpisuje skórkę tylko na spływie.
+- **Wioska:** `Systems/VillageCosmetics` (stan i zakładanie), `Systems/VillageLocker` (ring, budka, strefa `workspace.Locker.LockerZone`),
+  kontroler `Controllers/Locker`. Miejsce w `LakeLayout.locker`.
+- **Spływ:** `Systems/LookService` po wczytaniu profilu woła `KayakService.setLook`. Spływ tylko czyta `equipped`.
+
+### Zdarzenia `Remotes`
+
+- `CosmeticState` (serwer → gracz, wioska): `{ ready, failed, owned = { [id] = true }, equipped, unseen, stars, maxStars }`.
+- `CosmeticAction` (klient → serwer, wioska): `("sync")`, `("equip", slot, itemId)`, `("seen", slot)`. Limit `COSMETIC_ACTION_RATE`/`BURST`.
+  Handler sprawdza typy, slot, istnienie, `item.slot == slot`, posiadanie i wczytany profil. Nie ma zdarzenia „odblokuj”.

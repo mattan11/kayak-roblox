@@ -42,6 +42,8 @@ local DEFINITIONS: { [string]: Kind } = {
 	ArenaOut = "reliable", -- serwer → wszyscy: (userId, nazwa, miejsce)
 	ArenaResults = "reliable", -- serwer → wszyscy: lista wyników
 	PersonalBest = "reliable", -- serwer → gracz: (bestTime | nil, isNewRecord)
+	CosmeticState = "reliable", -- serwer → gracz (wioska): { ready, failed, owned, equipped, unseen, stars, maxStars }
+	CosmeticAction = "reliable", -- klient → serwer (wioska): ("sync") | ("equip", slot, itemId) | ("seen", slot); nigdy „odblokuj”
 }
 
 local FOLDER_NAME = "Remotes"

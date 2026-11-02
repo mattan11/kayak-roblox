@@ -17,6 +17,12 @@
         "$path": "src/village/server",
         "KayakService": {
           "$path": "src/server/Systems/KayakService.luau"
+        },
+        "Packages": {
+          "$path": "src/server/Packages"
+        },
+        "PlayerProfile": {
+          "$path": "src/server/PlayerProfile.luau"
         }
       }
     },

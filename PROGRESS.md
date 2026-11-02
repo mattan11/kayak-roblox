@@ -1,10 +1,12 @@
 # Postęp
 
-## ▶ NASTĘPNY KROK (stan na 2026-11-01)
+## ▶ NASTĘPNY KROK (stan na 2026-11-02)
 
-River Riders: Kayak Race. Wioska (start place) i Spływ są opublikowane dla testerów. Tryby: Wyścig, Bitwa, Wodna bitwa. Testy Lune: 314. Komplet 7 rzek i pierwsze modele są opublikowane i zacommitowane.
+River Riders: Kayak Race. Wioska (start place) i Spływ są opublikowane dla testerów. Tryby: Wyścig, Bitwa, Wodna bitwa. Testy Lune: 342. Skiny i szafka są zacommitowane, ale **jeszcze nie opublikowane**.
 
-**Jutro najpierw (skiny kajaków):** Smok przez cały proces: czyszczenie `assets/_ai/kayaks/dragon.glb`, ciemny kokpit, kolory, 8 studs, ok. 3000 trójkątów, import, test przez tymczasowy przełącznik w Config. Potem Feniks, Kraken, Kaczka, Rakieta; Rekin osobno, jeśli zestaw nie wystarczy. Strzała, Pękaty, Lodołamacz i Złoty Flisak w Blenderze. Neon i Lodowy Smok: najpierw koncepty są w `assets/concepts/kayaks`, modele 3D po sprawdzeniu Smoka. System: Gwiazdki (brąz 1, srebro 2, złoto 3, razem 21) odblokowują kajaki bez wydawania, Premium ma 3 poziomy (Zabawny, Rzadki, Legendarny). Nadal do sprawdzenia po ostatniej publikacji: „Płyń sam”, szersze koryta, skrzynki i bramy.
+**Najpierw:** ręczny test szafki w Wiosce (strefa i przycisk działają, okna nie dało się kliknąć narzędziem): podpłynąć do turkusowego ringu przed budką „Szafka”, otworzyć, przejrzeć skiny i kolory, założyć, popłynąć na wyścig i sprawdzić kajak. Potem publikacja **obu** miejsc naraz (szablony `LookAssets` są w obu, sprawdzić `MeshId`). `Config.COSMETICS_ALL_USERS` odblokowuje wszystko kontom Marka — przed premierą usunąć albo zostawić świadomie.
+
+**Skiny (13 kajaków, `content/CosmeticCatalog`):** Klasyk, Pękaty 1★, Kaczka 3★, Strzała 4★, Rekin 6★, Lodołamacz 8★, Rakieta 10★, Neon 12★, Feniks 14★, Złoty Flisak 16★, Kraken 18★, Lodowy Smok 20★, Smok 21★ (progi do dopasowania; Kaczka, Neon i Lodowy Smok docelowo Premium za Robux). Dwie drogi robienia modeli, opisane w `assets/concepts/STYLE.md`: (1) Meshy w aplikacji w Chrome — obraz Nano Banana 2 (6 kr.) albo gotowy koncept → „Obraz do 3D” Smart Topology T2.5, 15 000, tekstura, bez pozy (15 kr.) → `assets/_src/build_skin.py -- <klucz>` z `rebake` (Rekin, Neon, Lodowy Smok); (2) proste kadłuby w `assets/_src/build_simple_kayaks.py` (Strzała, Pękaty, Lodołamacz, Złoty Flisak). Szablon: części Paint (+ Cockpit, Accents, Deck…), początek = środek Hull, dno kokpitu 0,62 nad nim. Znane: w Strzale przed kokpitem wystaje czubek buta (Marek: zostaje). Do rozważenia: Rakieta od nowa przez Meshy, świecenie Neonu częścią Neon. Nadal do sprawdzenia po ostatniej publikacji: „Płyń sam”, szersze koryta, skrzynki i bramy.
 
 **Test Marka (opublikowana wersja):**
 1. Przejazdy wszystkich nowych rzek: czasy, wodospady, kamera w kanionach, czy nigdzie się nie utyka, czy kolejność trudności się zgadza.

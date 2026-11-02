@@ -91,6 +91,25 @@ local Config = {
 		Hard2 = { gold = 150, silver = 165, bronze = 193 },
 	},
 
+	-- Wygląd i szafka (COSMETICS.md). Katalog i progi gwiazdek: content/CosmeticCatalog.
+	-- Tylko Studio: profil na danych tymczasowych (ProfileStore.Mock) i wszystkie przedmioty w szafce. Poza Studio nic nie robi.
+	COSMETICS_STUDIO_ALL = true,
+	-- Konta testowe Marka: wszystkie skórki i kolory na stałe w prawdziwym profilu (QuencodellGames, Quencodell na telefonie)
+	COSMETICS_ALL_USERS = { [3085911285] = true, [11905332117] = true },
+	COSMETIC_ACTION_RATE = 4, -- CosmeticAction: zapytań na sekundę
+	COSMETIC_ACTION_BURST = 8,
+	LOCKER_BUTTON_WIDTH = 200, -- „Szafka”: w tym samym miejscu co „Wybierz rzekę” (strefy się nie pokrywają)
+	LOCKER_WINDOW_WIDTH = 640, -- okno szafki w pikselach projektu (wysokość ekranu 400)
+	LOCKER_WINDOW_HEIGHT = 340,
+	LOCKER_PREVIEW_WIDTH = 230, -- lewa kolumna: podgląd 3D, gwiazdki i „Załóż”
+	LOCKER_TILE_WIDTH = 118,
+	LOCKER_TILE_HEIGHT = 92,
+	LOCKER_TILE_GAP = 8,
+	LOCKER_COLUMNS = 3,
+	LOCKER_SPIN_SPEED = 0.6, -- obrót podglądu (rad/s), tylko gdy okno jest otwarte
+	VILLAGE_LOCKER_ZONE_RADIUS = 16, -- ring boi szafki na jeziorze (miejsce: content/LakeLayout.locker)
+	VILLAGE_LOCKER_BUOYS = 14,
+
 	-- Duchy
 	GHOST_SAMPLE_INTERVAL = 0.5, -- co ile s serwer zostawia próbkę przejazdu
 	GHOST_TIME_SCALE = 100, -- czas próbki w setnych sekundy
@@ -240,6 +259,7 @@ local Config = {
 	RESULTS_ROTATE_TIME = 6, -- co tyle s tablica pokazuje następną rzekę
 	RESULTS_REFRESH_TIME = 60, -- co tyle s nowy odczyt rankingów
 	TUTORIAL_ALWAYS = false, -- true: nauka przy każdym wejściu (tylko do testów), false: tylko nowi gracze
+	STUDIO_KAYAK = "KayakDragon", -- tylko Studio: szablon z LookAssets na kajak gracza (test skinu); nil = klasyk
 	TUTORIAL_TICK = 0.1, -- co ile s nauka odczytuje pozycję kajaka
 	TUTORIAL_TURN_ANGLE = 0.35, -- krok „skręć”: tyle radianów w dobrą stronę (ok. 20°)
 	TUTORIAL_STRAIGHT_DISTANCE = 30, -- krok „płyń prosto”: tyle studs od punktu startu kroku

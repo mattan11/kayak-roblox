@@ -38,6 +38,28 @@ return {
 	queueLeave = "Zejdź",
 	queueSolo = "Płyń sam",
 
+	-- Szafka (Locker): skórki kajaka i kolory. Gwiazdki: brąz 1, srebro 2, złoto 3 na każdej rzece.
+	locker = {
+		open = "Szafka",
+		openNew = "Szafka · nowe: %d",
+		title = "Szafka",
+		close = "X",
+		tabs = { kayak = "Kajaki", paint = "Kolory" },
+		stars = "★ %d/%d", -- gwiazdki gracza / najwięcej
+		need = "★ %d", -- próg na kafelku
+		lock = "🔒",
+		newBadge = "Nowe",
+		soon = "Wkrótce",
+		nameWithPaint = "%s · %s", -- skórka · kolor
+		equip = "Załóż",
+		equipped = "Założone",
+		locked = "Zablokowane",
+		lockedDetail = "%s: potrzeba %d★, masz %d★. Zdobywaj medale na rzekach.",
+		loading = "Wczytuję…",
+		failed = "Nie udało się wczytać. Wygląd zostaje domyślny.",
+		fixedLook = "Ta skórka ma stały kolor. Kolor zmienia tylko Klasyka.",
+	},
+
 
 	-- LakeTutorial. Kierunki i pola dopasowuje kontroler do sterowania gracza.
 	tutorial = {

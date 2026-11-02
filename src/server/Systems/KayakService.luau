@@ -1,4 +1,5 @@
--- Kajaki graczy: model z części, posadzenie w Seat, własność sieciowa, echo wiosła. Kontrakt nazw: ARCHITECTURE.md.
+-- Kajaki graczy: szkielet z części, skóra z KayakBody, posadzenie w Seat, własność sieciowa, echo wiosła. Kontrakt nazw: ARCHITECTURE.md.
+-- Wygląd (skórka i kolor) ustawia setLook po wczytaniu profilu; do tego czasu kajak ma wygląd domyślny (COSMETICS.md, sekcja 6).
 -- Kajak jest jeden na gracza i wraca przy nowym wyścigu (place). Sterowanie to dwa sztywne Align z celem, który
 -- ustawia klient, a serwer ustawia cel tylko przy rozstawieniu. Przód kajaka = −Z modelu (jak LookVector),
 -- czyli orientacja to CFrame.lookAt(pozycja, pozycja + (cos heading, 0, sin heading)).
@@ -9,9 +10,15 @@
 local Players = game:GetService("Players")
 local PhysicsService = game:GetService("PhysicsService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
-local LookAssets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LookAssets"))
-local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Cosmetics = require(Shared:WaitForChild("Cosmetics"))
+local KayakBody = require(Shared:WaitForChild("KayakBody"))
+local LookAssets = require(Shared:WaitForChild("LookAssets"))
+local Places = require(Shared:WaitForChild("Places"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local KayakService = {}
 
@@ -19,23 +26,14 @@ local KAYAK_Y = 0.3 -- nad lustrem wody (y = 0)
 local CHECK_INTERVAL = 0.5
 local COLLISION_GROUP = "Kayakers" -- postacie w kajakach nie zderzają się ze sobą (zderzenia liczy KayakPhysics)
 
-local HULL_LENGTH = 5.2
-local TIP_LENGTH = 1.4 -- dziób i rufa; razem 8 studs
-local HULL_WIDTH = 2
-local HULL_HEIGHT = 1
-
-local COLORS = {
-	Color3.fromRGB(226, 84, 60),
-	Color3.fromRGB(240, 170, 50),
-	Color3.fromRGB(62, 150, 210),
-	Color3.fromRGB(96, 190, 110),
-	Color3.fromRGB(190, 90, 200),
-	Color3.fromRGB(240, 110, 150),
-}
+local HULL_LENGTH = KayakBody.HULL_LENGTH
+local HULL_WIDTH = KayakBody.HULL_WIDTH
+local HULL_HEIGHT = KayakBody.HULL_HEIGHT
 
 local PADDLE_KINDS = { stroke = true, brace = true, release = true }
 
 local kayaks: { [Player]: Model } = {}
+local looks: { [Player]: Cosmetics.Look } = {} -- wygląd z profilu; brak = domyślny dla userId
 local container: Folder
 
 -- Każda część poza Hull: bez kolizji i bez masy (ARCHITECTURE.md). Hull też bez kolizji: ruch liczy fizyka 2D.
@@ -63,52 +61,46 @@ local function weld(part0: BasePart, part1: BasePart)
 	joint.Parent = part1
 end
 
--- Czubek z dwóch klinów ułożonych płasko (trójkąt widać z góry), dotykających się na osi kajaka.
--- Klin ma kąt prosty przy (−Y, +Z), a ostrze przy (−Y, −Z): lokalne Y kierujemy w bok, Z zostawiamy wzdłuż kajaka.
--- `facing` = obrót całości: bez obrotu czubek celuje w −Z (dziób), o 180° w +Z (rufa).
-local function tip(model: Model, hull: Part, name: string, facing: CFrame)
-	local zBase = -HULL_LENGTH / 2 - TIP_LENGTH / 2
-	local size = Vector3.new(HULL_HEIGHT, HULL_WIDTH / 2, TIP_LENGTH)
-	for _, side in { -1, 1 } do
-		local place = CFrame.fromMatrix(
-			Vector3.new(side * HULL_WIDTH / 4, 0, zBase),
-			Vector3.new(0, -side, 0),
-			Vector3.new(side, 0, 0),
-			Vector3.zAxis
-		)
-		weld(hull, shell(model, "WedgePart", name, size, facing * place, hull.Color))
+-- W Studio Config.STUDIO_KAYAK podmienia skórkę na spływie (test szablonu bez szafki). W wiosce nie, żeby dało się sprawdzić szafkę.
+local function resolveLook(look: Cosmetics.Look): Cosmetics.Look
+	local override = Config.STUDIO_KAYAK
+	if override and RunService:IsStudio() and Places.current().id == "race" then
+		return { template = override, color = nil, classicColor = look.classicColor }
 	end
+	return look
+end
+
+-- Skóra na niewidocznym Hull: stary folder Look precz, nowy spawany do Hull w jego bieżącym położeniu.
+-- Części KayakBody leżą tak, jakby Hull stał w środku świata, więc wystarczy je przemnożyć przez CFrame Hull.
+local function attachLook(model: Model, look: Cosmetics.Look)
+	local hull = model.PrimaryPart :: BasePart
+	local old = model:FindFirstChild(KayakBody.NAME)
+	if old then
+		old:Destroy()
+	end
+	local body = KayakBody.build(resolveLook(look))
+	for _, part in KayakBody.parts(body) do
+		part.Anchored = false
+		part.CFrame = hull.CFrame * part.CFrame
+		weld(hull, part)
+	end
+	body.Parent = model
 end
 
 -- Model budowany w środku świata, bez rodzica. Wołający ustawia go przez PivotTo.
-function KayakService.build(userId: number): Model
+function KayakService.build(userId: number, look: Cosmetics.Look?): Model
 	local model = Instance.new("Model")
 	model.Name = tostring(userId)
 	model:SetAttribute("Finished", false)
-	local color = COLORS[userId % #COLORS + 1]
 	local dark = Color3.fromRGB(34, 36, 40)
 
-	local hull = shell(model, "Part", "Hull", Vector3.new(HULL_WIDTH, HULL_HEIGHT, HULL_LENGTH), CFrame.identity, color)
+	-- Hull to szkielet: zawsze niewidoczny, rozmiar bez zmian. Widać skórę z KayakBody.
+	local hull = shell(model, "Part", "Hull", Vector3.new(HULL_WIDTH, HULL_HEIGHT, HULL_LENGTH), CFrame.identity, dark)
 	hull.Massless = false
+	hull.Transparency = 1
 	hull.RootPriority = 127 -- korzeniem złożenia zostaje Hull, także gdy siądzie w nim postać
 	model.PrimaryPart = hull
-
-	-- Wygląd: model z LookAssets na niewidocznym Hull. Bez szablonu stary kajak z części.
-	local look = LookAssets.clone("KayakClassic")
-	if look then
-		hull.Transparency = 1
-		look.Name = "Look"
-		look.Paint.Color = color
-		look.Parent = model
-		for _, part in look:GetChildren() do
-			part.Anchored = false
-			weld(hull, part)
-		end
-	else
-		tip(model, hull, "Bow", CFrame.identity)
-		tip(model, hull, "Stern", CFrame.Angles(0, math.pi, 0))
-		weld(hull, shell(model, "Part", "Cockpit", Vector3.new(1.5, 0.1, 3), CFrame.new(0, HULL_HEIGHT / 2 + 0.02, -0.2), dark))
-	end
+	attachLook(model, look or Cosmetics.look(nil, userId))
 
 	local seat = shell(model, "Seat", "Seat", Vector3.new(1.3, 0.2, 1.3), CFrame.new(0, HULL_HEIGHT / 2 + 0.1, 0.2), dark)
 	seat.Transparency = 1
@@ -196,7 +188,7 @@ function KayakService.place(player: Player, position: Vector2, heading: number)
 	local kayak = kayaks[player]
 	local isNew = kayak == nil
 	if not kayak then
-		kayak = KayakService.build(player.UserId)
+		kayak = KayakService.build(player.UserId, looks[player])
 		kayaks[player] = kayak
 	end
 	local hull = (kayak :: Model).PrimaryPart :: any
@@ -212,6 +204,21 @@ function KayakService.place(player: Player, position: Vector2, heading: number)
 	end
 	hull:SetNetworkOwner(player) -- wymaga części w workspace, stąd dopiero po Parent
 	seatPlayer(player, kayak)
+end
+
+-- Wygląd z profilu (Cosmetics.look). Kajak, który już pływa, od razu zmienia skórę; nowy dostanie ją w place().
+-- Nowe części w złożeniu: własność sieciową trzeba potwierdzić, inaczej przejąłby ją serwer (szarpnięcie kajaka).
+function KayakService.setLook(player: Player, look: Cosmetics.Look)
+	looks[player] = look
+	local kayak = kayaks[player]
+	if kayak == nil then
+		return
+	end
+	attachLook(kayak, look)
+	local hull = kayak.PrimaryPart :: BasePart
+	if hull:IsDescendantOf(workspace) then
+		hull:SetNetworkOwner(player)
+	end
 end
 
 -- Gracz na mecie: klient przestaje sterować.
@@ -253,6 +260,7 @@ function KayakService.init()
 	Players.PlayerRemoving:Connect(function(player)
 		local kayak = kayaks[player]
 		kayaks[player] = nil
+		looks[player] = nil
 		if kayak then
 			kayak:Destroy()
 		end
