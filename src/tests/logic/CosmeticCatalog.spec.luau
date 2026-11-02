@@ -54,7 +54,8 @@ return function(t)
 			end
 		end)
 
-		t.it("skórki kajaków: szablony i progi z decyzji Marka, kolor tylko na klasyku", function()
+		t.it("skórki kajaków: szablony i progi z decyzji Marka, kolor na klasyku i prostych kadłubach", function()
+			local PAINTABLE = { kayak_classic = true, kayak_round = true, kayak_racer = true, kayak_icebreaker = true }
 			local expected = {
 				kayak_classic = { "KayakClassic", nil },
 				kayak_round = { "KayakRound", 1 },
@@ -78,7 +79,7 @@ return function(t)
 					t.expect(entry ~= nil).toBe(true)
 					t.expect(item.render.kind).toBe("model")
 					t.expect(item.render.template).toBe(entry[1])
-					t.expect(item.render.paintable).toBe(item.id == "kayak_classic")
+					t.expect(item.render.paintable).toBe(PAINTABLE[item.id] == true)
 					t.expect(typeof(item.render.swatch)).toBe("Color3")
 					t.expect(if item.unlock.kind == "stars" then item.unlock.min else nil).toBe(entry[2])
 				end

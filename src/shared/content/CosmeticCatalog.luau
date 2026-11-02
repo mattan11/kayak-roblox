@@ -15,12 +15,13 @@
 --
 -- Gwiazdek się nie wydaje: próg tylko odblokowuje. 7 rzek × 3 = 21 gwiazdek najwyżej.
 
-local function kayak(id: string, label: string, template: string, swatch: Color3, minStars: number?)
+-- paintable: kolor z zakładki „Kolory” trafia na część Paint (klasyk i proste kadłuby z build_simple_kayaks.py)
+local function kayak(id: string, label: string, template: string, swatch: Color3, minStars: number?, paintable: boolean?)
 	return {
 		id = id,
 		slot = "kayak",
 		label = label,
-		render = { kind = "model", template = template, paintable = minStars == nil, swatch = swatch },
+		render = { kind = "model", template = template, paintable = minStars == nil or paintable == true, swatch = swatch },
 		unlock = if minStars then { kind = "stars", min = minStars } else { kind = "default" },
 	}
 end
@@ -30,13 +31,14 @@ local function paint(id: string, label: string, color: Color3, minStars: number)
 end
 
 return {
-	-- Kajaki. Skórki z teksturą mają stały wygląd: kolor ich nie zmienia (paintable = false).
+	-- Kajaki. Klasyk, Pękaty, Strzała i Lodołamacz biorą kolor gracza (decyzja Marka 2026-11-02); skórki z teksturą
+	-- i Złoty Flisak mają stały wygląd.
 	kayak("kayak_classic", "Klasyk", "KayakClassic", Color3.fromRGB(226, 84, 60)),
-	kayak("kayak_round", "Pękaty", "KayakRound", Color3.fromRGB(255, 110, 20), 1),
+	kayak("kayak_round", "Pękaty", "KayakRound", Color3.fromRGB(255, 110, 20), 1, true),
 	kayak("kayak_duck", "Kaczka", "KayakDuck", Color3.fromRGB(255, 214, 64), 3), -- docelowo za Robux (MONETIZATION.md), w v1 za gwiazdki
-	kayak("kayak_racer", "Strzała", "KayakRacer", Color3.fromRGB(0, 110, 255), 4),
+	kayak("kayak_racer", "Strzała", "KayakRacer", Color3.fromRGB(0, 110, 255), 4, true),
 	kayak("kayak_shark", "Rekin", "KayakShark", Color3.fromRGB(110, 140, 165), 6),
-	kayak("kayak_icebreaker", "Lodołamacz", "KayakIcebreaker", Color3.fromRGB(240, 244, 248), 8),
+	kayak("kayak_icebreaker", "Lodołamacz", "KayakIcebreaker", Color3.fromRGB(240, 244, 248), 8, true),
 	kayak("kayak_rocket", "Rakieta", "KayakRocket", Color3.fromRGB(235, 235, 240), 10),
 	kayak("kayak_neon", "Neon", "KayakNeon", Color3.fromRGB(70, 220, 230), 12), -- docelowo Premium za Robux, w v1 za gwiazdki
 	kayak("kayak_phoenix", "Feniks", "KayakPhoenix", Color3.fromRGB(245, 120, 40), 14),

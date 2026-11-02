@@ -70,7 +70,8 @@ local function fromParts(color: Color3): Model
 end
 
 -- Widoczne części kajaka. `look` z Cosmetics.look: { template, color?, classicColor }.
--- Kolor trafia na część Paint tylko w klasyku (skórki z teksturą mają stały wygląd).
+-- Kolor trafia na części o nazwie Paint tylko w skórkach z `paintable` (skórki z teksturą mają stały wygląd).
+-- Paint może być kilka: Lodołamacz ma tak nazwany kadłub i płyty pancerza, żeby zmieniały kolor razem.
 function KayakBody.build(look: any): Model
 	local model = LookAssets.clone(look.template)
 	local color = look.color
@@ -82,12 +83,11 @@ function KayakBody.build(look: any): Model
 		return fromParts(look.classicColor)
 	end
 	model.Name = KayakBody.NAME
-	local paint = model:FindFirstChild("Paint")
-	if color and paint and paint:IsA("BasePart") then
-		paint.Color = color
-	end
 	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") then
+			if color and part.Name == "Paint" then
+				part.Color = color
+			end
 			KayakBody.prepare(part)
 		end
 	end

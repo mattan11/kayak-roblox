@@ -57,7 +57,7 @@ return {
 		lockedDetail = "%s: potrzeba %d★, masz %d★. Zdobywaj medale na rzekach.",
 		loading = "Wczytuję…",
 		failed = "Nie udało się wczytać. Wygląd zostaje domyślny.",
-		fixedLook = "Ta skórka ma stały kolor. Kolor zmienia tylko Klasyka.",
+		fixedLook = "Ta skórka ma stały kolor. Kolor zmienia Klasyka, Pękatego, Strzałę i Lodołamacz.",
 	},
 
 

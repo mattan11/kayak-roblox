@@ -31,6 +31,8 @@ KAYAKS = {
         "name": "Round", "length": 7.6, "width": 3.1, "ends": 3.0, "fullness": 0.5, "crown": 0.1, "rocker": 0.2,
         "cockpit": (1.0, 1.55, 0.25), "colors": {"Paint": (1.0, 0.42, 0.05)},
     },
+    # Szablon KayakIcebreaker w grze jest powiększony ×1,1 wokół dna kokpitu (decyzja Marka 2026-11-02), a jego płyty
+    # nazywają się Paint, żeby brały kolor gracza razem z kadłubem. Przy przebudowie: oba kroki powtórzyć w szablonie.
     "icebreaker": {
         "name": "Icebreaker", "length": 9.0, "width": 2.9, "ends": 1.9, "fullness": 0.65, "crown": 0.15, "rocker": 0.12,
         "cockpit": (0.95, 1.5, 0.3), "colors": {"Paint": (0.27, 0.55, 0.86), "Deck": (0.94, 0.95, 0.97), "Accents": (0.33, 0.6, 0.9)},
@@ -140,8 +142,10 @@ def cockpit(spec):
     rx, ry, shift = spec["cockpit"]
     bm = bmesh.new()
     verts = [bm.verts.new((rx * math.cos(2 * math.pi * k / 28), shift + ry * math.sin(2 * math.pi * k / 28), FLOOR)) for k in range(28)]
-    bm.faces.new(verts)
-    return new_object("Kayak_" + spec["name"] + "_Cockpit", bm, smooth=False)
+    bm.faces.new(verts)  # wierzchołki przeciwnie do wskazówek zegara z góry: ściana patrzy w górę
+    # Bez recalc: na pojedynczej ścianie potrafi ją odwrócić w dół, a Roblox jej wtedy nie rysuje (Złoty Flisak z wodą w środku;
+    # w szablonie KayakGold dno jest obrócone o 180°, więc po przebudowie Złotego ten obrót trzeba zdjąć)
+    return new_object("Kayak_" + spec["name"] + "_Cockpit", bm, smooth=False, recalc=False)
 
 
 # Ozdoby kładziemy na powierzchni kadłuba: promień z góry (albo z boku) trafia w kadłub, część dostaje jego normalną.

@@ -65,7 +65,14 @@ end
 local function resolveLook(look: Cosmetics.Look): Cosmetics.Look
 	local override = Config.STUDIO_KAYAK
 	if override and RunService:IsStudio() and Places.current().id == "race" then
-		return { template = override, color = nil, classicColor = look.classicColor }
+		-- Skórka z kolorem gracza (paintable) dostaje ten sam kolor co klasyk, reszta stały wygląd
+		local paintable = false
+		for _, item in Cosmetics.list("kayak") do
+			if item.render.template == override then
+				paintable = item.render.paintable == true
+			end
+		end
+		return { template = override, color = if paintable then look.classicColor else nil, classicColor = look.classicColor }
 	end
 	return look
 end
